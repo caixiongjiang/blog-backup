@@ -1,20 +1,15 @@
-# riba2534's Blog
+# Jarson Cai's Blog
 
 
+目前新的博客采用 Github 托管源代码+Github Pages静态页面托管的方式运行。
 
-我的博客之前托管在腾讯云上，是 Typecho 的 php 动态网站
-
-现在技术博客流行静态化，专注于内容，我也想逐渐把我的博客静态化，调研了一下，目前比较好的静态化工具有 hugo 和 hexo ，由于本人目前从事 Golang 开发，遂选择 hugo 作为静态化博客的工具。
-
-目前新的博客采用 Github 托管源代码+腾讯云静态页面托管的方式运行。
-
-地址为：https://blog.riba2534.cn
+地址为：caixiongjiang.github.io
 
 ---
 
 主题链接：https://github.com/AmazingRise/hugo-theme-diary
 
-评论系统：https://twikoo.js.org/
+评论系统：https://twikoo.js.org/(要钱暂时不用)
 
 hugo模板开发教程：
 
@@ -37,3 +32,21 @@ git submodule update
 # 启动服务器
 hugo server
 ```
+
+# 维护
+
+本地部署博客（https端口预览）命令(这里使用Makefile配置了，所以跟官方的方法不一样)：
+
+```shell
+hugo server
+```
+
+根据markdown文件生成具体的html页面：
+
+```shell
+hugo --theme=diary --baseUrl="https://caixiongjiang.github.io/" --buildDrafts
+```
+
+此后便会生成相应的一个public文件，以此仓库作为git的根目录，也就是github的master的分支。
+
+* [图标下载地址](https://feathericons.com/)
