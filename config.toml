@@ -28,7 +28,7 @@ enableMathJax = true
 enableOpenGraph = true 
 enableReadingTime = true 
 enableTwikoo = true 
-favicon = "" 
+favicon = "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/avater.jfif" 
 subtitle = "头脑是日用品，不是装饰品" 
 twikooEnvId = "blog-9g6ht92ca9c564c6" 
 

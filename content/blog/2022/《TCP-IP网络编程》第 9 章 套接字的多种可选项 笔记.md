@@ -3,9 +3,10 @@ title: 《TCP/IP网络编程》第 9 章 套接字的多种可选项 笔记
 date: 2022-03-29T17:37:05+08:00
 lastmod: 2022-03-29T17:37:05+08:00
 draft: false
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/tcpip.png"
 tags:
 - 《TCP/IP网络编程》
+- c
 categories: 《TCP/IP网络编程》学习笔记
 series:
 - 《TCP/IP网络编程》学习笔记

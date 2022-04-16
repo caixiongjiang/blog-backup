@@ -3,9 +3,10 @@ title: 《TCP/IP网络编程》第 5 章 基于 TCP 的服务端/客户端（2�
 date: 2022-03-24T15:57:00+08:00
 lastmod: 2022-03-24T11:29:12+08:00
 draft: false
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/tcpip.png"
 tags:
 - 《TCP/IP网络编程》
+- c
 categories: 《TCP/IP网络编程》学习笔记
 series:
 - 《TCP/IP网络编程》学习笔记

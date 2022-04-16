@@ -3,7 +3,7 @@ title: "关于"
 date: 2021-02-31T13:11:39+08:00
 draft: false
 type: about
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/the-creative-exchange-d2zvqp3fpro-unsplash.jpg"
 description: "经过云端的道路，只亲吻攀登者的足迹"
 comment : true
 enableVue : true

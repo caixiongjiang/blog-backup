@@ -3,9 +3,10 @@ title: 《TCP/IP网络编程》第 16 章 关于 I/O 流分离的其他内容 �
 date: 2022-04-08T14:38:38+08:00
 lastmod: 2022-04-08T14:38:38+08:00
 draft: false
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/tcpip.png"
 tags:
 - 《TCP/IP网络编程》
+- c
 categories: 《TCP/IP网络编程》学习笔记
 series:
 - 《TCP/IP网络编程》学习笔记

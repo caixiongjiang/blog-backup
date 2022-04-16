@@ -3,9 +3,10 @@ title: 《TCP/IP网络编程》第 24 章 制作 HTTP 服务器端 笔记
 date: 2022-04-13T20:16:48+08:00
 lastmod: 2022-04-15T20:16:48+08:00
 draft: false
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/tcpip.png"
 tags:
 - 《TCP/IP网络编程》
+- c
 categories: 《TCP/IP网络编程》学习笔记
 series:
 - 《TCP/IP网络编程》学习笔记
