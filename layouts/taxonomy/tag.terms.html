@@ -1,0 +1,27 @@
+{{ define "main" }}
+<div ref="streamContainer" class="stream-container">
+    <div class="post-list-container post-list-container-shadow">
+        <a class="a-block">
+            <div class="post-item-wrapper post-item-wrapper-no-hover">
+                <div class="post-item post-item-no-gaps">
+                    <div class="post-item-info-wrapper">
+                        <div class="post-item-title post-item-title-small">
+                            标签
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+        <div style="margin:35px">
+            {{ range .Pages }}
+                <span class="post-item-wrapper">
+                    <a href="{{.Permalink}}">
+                        {{.Title}}<sup>{{ len .Pages }}</sup>
+                    </a>
+                </span>
+            {{ end }}
+        </div>
+    </div>
+</div>
+
+{{ end }}
