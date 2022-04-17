@@ -91,6 +91,6 @@ name = "Email"
 url = "nau_cxj@163.com"
 weight = 4
 [[menu.footer]]
-name = "LiKou"
+name = "Leetcode"
 url = "https://leetcode-cn.com/u/cai-xiong-jiang/"
 weight = 5

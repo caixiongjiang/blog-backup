@@ -7,7 +7,7 @@ featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/tcpip.
 tags:
 - 《TCP/IP网络编程》
 - c
-categories: 《TCP/IP网络编程》学习笔记
+categories: 网络编程
 series:
 - 《TCP/IP网络编程》学习笔记
 comment: true

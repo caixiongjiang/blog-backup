@@ -9,8 +9,6 @@ tags:
 - python
 - OpenCV
 categories:
-- 《数字图像处理》学习笔记
-series:
 - 数字图像处理
 comment : true
 ---

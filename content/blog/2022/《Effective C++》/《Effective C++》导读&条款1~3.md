@@ -7,7 +7,6 @@ featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/efc%2B
 description: "养成更好的C++语言使用习惯"
 tags:
 - c++
-- 《Effective C++》学习笔记
 categories:
 - 《Effective C++》学习笔记
 series:
