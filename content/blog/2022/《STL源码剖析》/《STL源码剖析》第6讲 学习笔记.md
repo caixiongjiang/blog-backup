@@ -1,5 +1,5 @@
 ---
-title: "《STL源码剖析》第六讲 学习笔记"
+title: "第六讲：迭代器设计的原则&iterator traits的作用与设计"
 date: 2022-04-08T18:18:05+08:00
 lastmod: 2022-04-08T18:18:06+08:00
 draft: false
