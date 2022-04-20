@@ -1,7 +1,7 @@
 ---
 title: "第九讲：deque，queue，stack深度探索"
-date: 2022-04-19T18:14:05+08:00
-lastmod: 2022-04-19T18:14:06+08:00
+date: 2022-04-20T18:14:05+08:00
+lastmod: 2022-04-20T18:14:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/STL.png"
 description: "主要用于了解stl各种容器的内部构造，熟悉使用c++容器，并了解其底层原理。"
