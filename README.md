@@ -22,7 +22,7 @@ hugo模板开发教程：
 
 ```bash
 # 克隆项目
-git clone git@github.com:riba2534/hugo-blog.git
+git clone https://github.com/caixiongjiang/blog-backup.git
 
 # 初始化本地配置文件
 git submodule init
