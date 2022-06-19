@@ -50,3 +50,9 @@ hugo --theme=diary --baseUrl="https://caixiongjiang.github.io/" --buildDrafts
 此后便会生成相应的一个public文件，以此仓库作为git的根目录，也就是github的master的分支。
 
 * [图标下载地址](https://feathericons.com/)
+
+如果你使用url推送有问题，也可以使用ssh方式进行推送：
+```shell
+git remote add origin git@github.com:caixiongjiang/blog-backup.git # 使用ssh连接远程仓库
+git push origin master #进行推送
+```
