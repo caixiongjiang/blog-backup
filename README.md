@@ -53,6 +53,6 @@ hugo --theme=diary --baseUrl="https://caixiongjiang.github.io/" --buildDrafts
 
 如果你使用url推送有问题，也可以使用ssh方式进行推送：
 ```shell
-git remote add origin git@github.com:caixiongjiang/blog-backup.git # 使用ssh连接远程仓库
-git push origin master #进行推送
+git remote add origin_ssh git@github.com:caixiongjiang/blog-backup.git # 使用ssh连接远程仓库
+git push origin_ssh master #进行推送
 ```
