@@ -4,7 +4,7 @@ date: 2022-06-18T18:18:05+08:00
 lastmod: 2022-06-19T18:20:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/git/img_title.jpg"
-description: "Git代码版本管理，学习一下分支的概念"
+description: "Git代码版本管理，学习一下分支的概念,分支合并事如何解决merge冲突。"
 tags:
 - Git
 categories:
