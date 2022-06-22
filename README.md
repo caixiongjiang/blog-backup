@@ -9,7 +9,11 @@
 
 主题链接：https://github.com/AmazingRise/hugo-theme-diary
 
-评论系统：https://twikoo.js.org/(要钱暂时不用)
+评论系统：https://twikoo.js.org/
+
+* 评论系统Vercel部署流程：可以参考这个[b站视频](https://www.bilibili.com/video/BV1Fh411e7ZH?spm_id_from=333.1007.top_right_bar_window_history.content.click&vd_source=841bd3506b40b195573d34fef4c5bdf7)，但是视频比较久远了，现在一些界面已经不同了，具体可以配合[中文文档](https://twikoo.js.org/quick-start.html#vercel-%E9%83%A8%E7%BD%B2)以来看。
+
+*特别需要注意的是：Vercel 部署的环境需配合 1.4.0 以上版本的 twikoo.js 使用！我就是没看到这句话导致我半天配置不成功。*
 
 hugo模板开发教程：
 
