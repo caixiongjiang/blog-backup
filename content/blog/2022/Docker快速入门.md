@@ -1,7 +1,7 @@
 ---
 title: "Docker快速入门"
 date: 2022-06-24T18:18:05+08:00
-lastmod: 2022-06-35T13:20:06+08:00
+lastmod: 2022-06-25T13:20:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/docker/img_title.jpg"
 description: "目前因为虚拟机的高消耗资源的特性，然后VM Fusion还不太适配M1系列的芯片，所以入门一下容器技术，用来平替。"
