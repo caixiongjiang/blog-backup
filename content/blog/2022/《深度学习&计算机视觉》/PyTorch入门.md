@@ -917,7 +917,7 @@ for epoch in range(20):
 
 在PyTorch中已经集成了许多经典的网络模型，在`torchvision`中有分类模型，语义分割模型，目标检测的模型。这次我们还是采用`CIFAR10`做一个分类模型，分类模型使用的是`VGG模型`中的`vgg16`。
 
-> `torchvision.models.``vgg16`(***, *weights: Optional[torchvision.models.vgg.VGG16_Weights] = None*, *progress: bool = True*, **kwargs: Any)
+> `torchvision.models.vgg16`(***, *weights: Optional[torchvision.models.vgg.VGG16_Weights] = None*, *progress: bool = True*, **kwargs: Any)
 
 参数：
 
