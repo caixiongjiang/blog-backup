@@ -3,7 +3,7 @@
 
 目前新的博客采用 Github 托管源代码+Github Pages静态页面托管的方式运行。
 
-地址为：caixiongjiang.github.io
+地址为：[caixiongjiang.github.io](https://caixiongjiang.github.io/)
 
 ---
 
