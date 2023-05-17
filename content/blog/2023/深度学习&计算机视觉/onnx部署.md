@@ -61,9 +61,9 @@ with torch.no_grad():
     torch.onnx.export(
         model,                      # 模型名称
         x,                          # 输入张量
-        verbose,                    # 是否打印详细信息
         'FastSegFormer_P_224.onnx', # 导出的模型文件名称
-        opset_version=12,           # 算子版本
+        verbose=False,              # 是否打印详细信息
+        opset_version=12,           # 算子版本(一般使用11以上的版本)
         training=torch.onnx.TrainingMode.EVAL,  # 验证模型
         do_constant_folding = True, # 是否进行常量折叠优化
         input_names=['input'],      # 输入张量的名字（自取，后面要用到）
