@@ -159,3 +159,74 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 ```
 如果出现下面的情况说明cudnn测试成功了：
 ![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img46.jpg)
+
+### 第一个CUDA程序
+
+#### Ubuntu配置编程工具
+下载一个`vscode`，选择官网的`.deb`版本。
+
+下载完成之后安装：
+```shell
+$ sudo dpkg -i code_1.80.1-1689183569_amd64.deb
+```
+启动`vscode`：
+```shell
+$ code
+```
+
+`vscode`添加扩展程序：
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img47.jpg)
+
+#### 编写CUDA程序并执行
+
+> 编写第一个gpu程序
+
+一般来说，CUDA程序是`.cu`结尾的程序！
+
+hello-gpu.cu:
+
+```c
+#include <stdio.h>
+
+void cpu() {
+    printf("hello cpu\n");
+}
+
+__global__ void gpu() {
+    printf("hello gpu\n");
+}
+
+int main() {
+    cpu();
+    gpu<<<1, 1>>>();
+    // 等待cpu和gpu同步
+    cudaDeviceSynchronize();
+}
+```
+\_\_global\_\_:
+
+* __global__关键字代表以下**函数将在GPU山运行并全局可调用。**
+* 通过我们将在cpu上执行的代码称为主机代码，而在GPU上运行的代码称为设备代码。
+* 注意返回类型为void。使用__global__关键字定义的函数需要返回void类型。
+
+gpu<<<1, 1>>>():
+* 通常，当调用要在GPU上运行的函数时，我们将这种函数称为`已启动的核函数`。
+* 启动核函数之前必须提供执行的配置，在向核函数传递任何预期参数之前使用`<<<...>>>`语法完成配置。
+* 程序员可通过执行配置为核函数启动指定线程层次结构，从而定义`线程组（也称为线程块）的数量`，以及要在`每个线程块中执行的线程数量`。这里就代表正在使用包含1线程（第二个配置参数）的1线程块（第一个配置参数）启动核函数。
+
+cudaDeviceSynchronize():
+
+* 与大部分c/c++代码不同，**核函数启动方式为异步：CPU代码将继续执行而无需等待核函数完成启动。**
+* 调用CUDA运行时提供的函数cudaDeviceSynchronize将导致主机（cpu）代码暂停，直至设备（GPU）代码执行完成，才能在cpu上恢复执行。
+
+> 使用nvcc编译、链接、执行
+
+```shell
+nvcc -o hello-gpu hello-gpu.cu -run
+```
+看到
+```scss
+hello cpu
+hello gpu
+```
+说明你编译、链接、执行成功。
