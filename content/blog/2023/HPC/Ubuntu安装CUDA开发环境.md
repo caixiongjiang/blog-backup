@@ -155,7 +155,7 @@ $ ./mnistCUDNN
 ```
 注：如果上面的make命令提示缺少`FreeImage.h`，运行：
 ```shell
-sudo apt-get install libfreeimage3 libfreeimage-dev
+$ sudo apt-get install libfreeimage3 libfreeimage-dev
 ```
 如果出现下面的情况说明cudnn测试成功了：
 ![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img46.jpg)
