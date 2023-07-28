@@ -380,3 +380,487 @@ int main() {
   	cudaFree(c_gpu);
 }
 ```
+
+### CUDA性能分析
+
+> 安装NVIDIA Nsight Systems
+
+* 进入[官网](https://developer.nvidia.cn/gameworksdownload)，下载`Nsight Systems`的Linux CLI的`.deb`版本
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img64.jpg)
+
+* 在本地进行安装：
+
+```shell
+$ sudo dpkg -i NsightSystems-linux-cli-public-2023.2.1.122-3259852.deb
+```
+
+* 在终端使用：
+
+```shell
+#application是程序，application-arguments是程序参数
+$ nsys [global-options] profile [options] <application> [application-arguments]
+```
+
+参数的选择如下图所示：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img65.jpg)
+
+* 对上述矩阵加法的程序进行性能分析：
+
+```shell
+$ nsys profile --stats=true matrix
+```
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img66.jpg)
+
+**可以看到我们的程序的大部分时间都花在了显存分配这件事上，那么我们优化的目标就是让GPU计算的时间占总时间的比重更大，那么程序的效率就会越高。** 
+
+### GPU属性
+
+GPU内部有许多称为`SM`的**流多处理器**，一个`SM`有多个流处理器，GPU在执行Kernel函数的时候，会让SM去处理Block。
+
+SM会在**一个名为`WARP`的线程块**内创建、管理、调度和执行**32**个线程的线程组。所以线程数选32的倍数最佳！！
+
+> GPU信息获取
+
+* 编写CUDA程序获取：
+
+```c
+#include <stdio.h>
+
+int main() {
+  	int id;
+  	cudaGetDevice(&id);
+  	
+  	cudaDeviceProp props;
+  	cudaGetDeviceProperties(&props, id);
+  	printf("Device id: %d\n \
+  	SM_num: %d\n \
+  	capability major: %d\n \
+  	capability minor: %d\n \
+  	warp size: %d\n"\
+   	, id, props.multiProcessorCount, props.major, props.minor, props.warp);
+}
+```
+
+编译运行后得到结果：
+
+```scss
+Device id: 0
+SM_num: 28
+capability major: 8
+capability minor: 6
+warp size: 32
+```
+
+查询我的显卡（RTX3060）的流处理器总共有3564个，那么一个SM（流多处理器）的流处理器个数为128个。
+
+### 显存分配（2）
+
+前面我们使用的显存分配方式为`cudaMallocManaged()`方法，**这种方法第一时间分配的其实并不是显存，而是统一内存（UM）。分配UM时，内存尚未驻留在主机（Host）上或设备（Device）上。主机或者设备尝试访问内存时会发生缺页中断，此时主机或者设备才会批量迁移所需要的数据。也就是说CPU和GPU访问该内存都会发生上述的事件。**
+
+如果分配的内存既被CPU调用，又被GPU调用，那么便可以使用这种分配方式。
+
+我们使用CUDA性能分析工具对前面`hello-gpu`的程序块进行分析：
+
+```shell
+$ nsys profile --stats=true hello-gpu
+```
+
+得到的部分信息如下：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img67.jpg)
+
+可以看到有`HtoD`和`DtoH`，这是由缺页触发的。
+
+> 如何避免缺页触发内存拷贝？
+
+我们可以通过`cudaMemPrefetchAsync`函数将托管内存异步预取到GPU设备上或CPU。那么在代码上该如何操作(在前面matrix.cu上进行修改)：
+
+```c
+#include <stdio.h>
+
+#define N 64
+
+__global__ void gpu(int *a, int *b, int *c_gpu) {
+  	int r = blockDim.x * blockIdx.x + threadIdx.x;
+  	int c = blockDim.y * blockIdx.y + threadIdx.y;
+  	if (r < N && c < N) {
+      	c_gpu[r * N + c] = a[r * N + c] + b[r * N + c];
+    }
+}
+
+void cpu(int *a, int *b, int *c_cpu) {
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	c_cpu[r * N + c] = a[r * N + c] + b[r * N + c];
+        }
+    }
+}
+
+bool check(int *a, int *b, int *c_cpu, int *c_gpu) {
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	if (c_cpu[r * N + c] != c_gpu[r * N + c]) return false;
+        }
+    }
+  	return true;
+}
+
+
+int main() {
+  	int *a, *b, *c_cpu, *c_gpu;
+  	size_t size = N * N * sizeof(int);
+  	//分配globalmemory
+  	cudaMallocManaged(&a, size);
+  	cudaMallocManaged(&b, size);
+  	cudaMallocManaged(&c_cpu, size);
+ 	 	cudaMallocManaged(&c_gpu, size);
+  	
+  	//初始化
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	a[r * N + c] = r;
+          	b[r * N + c] = c;
+          	c_cpu[r * N + c] = 0;
+          	c_gpu[r * N + c] = 0;
+        }
+    }
+  
+  	//在GPU访问统一内存之前进行预取，防止发生缺页影响性能
+  	int id;
+  	cudaGetDevice(&id);
+  	cudaMemPrefetchAsync(a, size, id);
+  	cudaMemPrefetchAsync(b, size, id);
+  	cudaMemPrefetchAsync(c_gpu, size, id);
+
+  	dim3 threads(16, 16, 1);
+  	dim3 blocks((N + threads.x - 1) / threads.x, N + threads.y - 1) / threads.y, 1);
+  	gpu<<<blocks, threads>>>(a, b, c_gpu);
+  
+  	//数据同步到CPU之前将GPU的内存预取到CPU上
+  	
+  
+  	//同步到cpu上
+  	cudaDeviceSynchronize();
+  	
+  	cpu(a, b, c_cpu);
+  	check(a, b, c_cpu, c_gpu) ? printf("ok!\n") : printf("error!\n");
+  
+  	cudaFree(a);
+  	cudaFree(b);
+  	cudaFree(c_cpu);
+  	cudaFree(c_gpu);
+}
+```
+
+对旧的`matrix.cu`和新的`matrix.cu`分别进行编译并进行性能分析：
+
+旧的matrix.cu:
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img68.jpg)
+
+新的matrix.cu:
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img69.jpg)
+
+明显可以看到内存拷贝的开销变少了。无论是Host->Device还是Device->Host。
+
+### 显存分配（3）
+
+那么CUDA编程中除了分配统一内存，是否可以直接分配GPU显存，或者CPU锁页内存。
+
+* `cudaMalloc`命令将直接为处于活动状态的GPU分配显存。这可以防止出现所有GPU分页错误，而代价是主机代码将无法访问该命令返回的指针。
+* `cudaMallocHost`命令将直接为CPU分配内存。该命令可以"固定"内存（pinned memory）或"锁页"内存（page-locked memory）。它允许将内存异步拷贝至GPU或从GPU异步拷贝至内存。固定内存过多则会干扰CPU性能。释放固定内存时，应使用`cudaFreeHost`命令。
+* 无论是从主机到设备还是设备到主机，`cudaMemcpy`命令均可拷贝（而非传输）内存。
+
+我们将之前的matrix.cu再次改写：
+
+```c
+#include <stdio.h>
+#include <assert>
+
+#define N 64
+
+__global__ void gpu(int *a_gpu, int *b_gpu, int *c_gpu) {
+  	int r = blockDim.x * blockIdx.x + threadIdx.x;
+  	int c = blockDim.y * blockIdx.y + threadIdx.y;
+  	if (r < N && c < N) {
+      	c_gpu[r * N + c] = a_gpu[r * N + c] + b_gpu[r * N + c];
+    }
+}
+
+void cpu(int *a_cpu, int *b_cpu, int *c_cpu) {
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	c_cpu[r * N + c] = a_cpu[r * N + c] + b_cpu[r * N + c];
+        }
+    }
+}
+
+bool check(int *c_cpu, int *c_gpu) {
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	if (c_cpu[r * N + c] != c_gpu[r * N + c]) return false;
+        }
+    }
+  	return true;
+}
+
+inline cudaError_t checkCuda(cudaError_t result) {
+  	if (result != cudaSuccess) {
+      	fprintf(stderr, "CUDA runtime error: %s\n", cudaGetErrorString(result));
+      	assert(result == cudaSuccess);
+    }
+  	return result;
+}
+
+
+int main() {
+  	int *a_cpu, *b_cpu, *a_gpu, *b_gpu, *c_gpu2cpu, *c_cpu, *c_gpu;
+  	size_t size = N * N * sizeof(int);
+  	
+  	//分配memory
+  	cudaMallocHost(&a_cpu, size);
+  	cudaMallocHost(&b_cpu, size);
+  	cudaMallocHost(&c_cpu, size);
+  	cudaMallocHost(&c_gpu2cpu, size);
+  	cudaMalloc(&a_gpu, size);
+  	cudaMalloc(&b_gpu, size);
+ 	 	cudaMalloc(&c_gpu, size);
+  	
+  	//初始化
+  	for (int r = 0; r < N; r++) {
+      	for (int c = 0; c < N; c++) {
+          	a_cpu[r * N + c] = r;
+          	b_cpu[r * N + c] = c;
+          	c_cpu[r * N + c] = 0;
+          	c_gpu2cpu[r * N + c] = 0;
+          	//c_gpu[r * N + c] = 0; 不能直接访问GPU
+        }
+    }
+
+  	cpu(a_cpu, b_cpu, c_cpu);
+  
+  	dim3 threads(16, 16, 1);
+  	dim3 blocks((N + threads.x - 1) / threads.x, N + threads.y - 1) / threads.y, 1);
+  	
+  	//理论上的内存拷贝，但其实不需要，因为锁页内存在CUDA中不会被映射到硬盘上，但可以直接被GPU调用
+  	cudaMemcpy(a_gpu, a_cpu, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(b_gpu, b_cpu, size, cudaMemcpyHostToDevice);
+  	
+    gpu<<<blocks, threads>>>(a_gpu, b_gpu, c_gpu);
+  	//同步到cpu上
+  	cudaDeviceSynchronize();
+  	cudaMemcpy(c_gpu2cpu, c_cpu, size, cudaMemcpyDeviceToHost);
+  	
+  	check(c_cpu, c_gpu) ? printf("ok!\n") : printf("error!\n");
+  
+  	cudaFreeHost(a_cpu);
+  	cudaFreeHost(b_cpu);
+  	cudaFreeHost(c_cpu);
+  	cudaFreeHost(c_gpu2cpu);
+  	cudaFree(c_gpu);
+  	cudaFree(a_gpu);
+  	cudaFree(b_gpu);
+}
+```
+
+
+
+> 为什么GPU可以直接调用cudaMallocHost分配的锁页内存？
+
+在CUDA编程中，使用cudaMallocHost函数分配的内存是锁页内存，这意味着该内存页不会被交换到磁盘上，从而提高了访问速度。此外，**锁页内存还可以直接与GPU内存进行数据传输，而不需要通过PCIe总线，从而进一步提高了数据传输速度。**
+
+在CUDA编程中，GPU可以直接使用cudaMallocHost分配的锁页内存，是因为这些内存页已经被固定在物理内存中，并且可以直接映射到GPU的地址空间中。因此，在Kernel函数中可以直接访问这些内存页，而不需要进行额外的数据传输或者拷贝操作。
+
+需要注意的是，在使用锁页内存时需要小心，因为它们会占用较多的系统内存，并且可能会导致系统变慢或者崩溃。因此，在使用锁页内存时需要谨慎考虑内存使用量，并且及时释放不再需要的内存。
+
+### CUDA流
+
+在CUDA编程中，流是按照顺序执行的一系列命令构成。在CUDA应用程序中，核函数的执行以及一些内存传输均在CUDA流中进行。
+
+CUDA流行为的几项规则：
+
+* 在给定流中所有操作回按序执行。
+* 就不同非默认流中的操作而言，无法保证会按彼此之间的任何特定顺序执行
+* 默认流具有阻断能力，它会等待其他已在运行的所有流完成当前操作后才运行，但其自身运行完毕之前，也会阻碍其他流的运行。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img70.jpg)
+
+> CUDA流如何创建，运行机制是什么？
+
+用NVIDIA官方的例程来解释一下：
+
+```c
+#include <stdio.h>
+
+const int N = 1 << 20;
+
+__global__ void kernel(float *x, int n) {
+    int tid = threadIdx.x + blockIdx.x +  blockDim.x;
+    for (int i = tid; i < n; i += blockDim.x * gridDim.x) {
+        x[i] += sqrt(pow(3.14159, i));                                                                                                                                                                                                                                                                                                             
+    }
+}
+
+
+
+int main() {
+    const int num_streams = 8;
+    cudaStream_t streams[num_streams];
+    float *data[num_streams];
+
+    for (int i = 0; i < num_streams; i++) {
+        cudaStreamCreate(&streams[i]);
+
+        cudaMalloc(&data[i], N * sizeof(float));
+
+        //launch one worker kernel per stream
+        kernel<<<1, 64, 0, streams[i]>>>(data[i], N);
+
+        //launch a dummy kernel
+        kernel<<<1, 1>>>(0, 0);
+    }
+
+    cudaDeviceReset();
+
+    return 0;
+}
+```
+
+上面的`kernel<<<1, 1>>>`代表使用默认流，如果没有这句话，那么上面的每次计算几乎是并行的，因为每个Kernel函数执行的时间较长，不是默认流的情况下，新的流不断执行Kernel函数，而上一个Kernel函数还没有执行完，就会出现类似于流水线并行的方式。
+
+如果有这个虚拟的默认流程序，就会将所有的Kernel函数分割成按序进行。**因为在非默认流有函数运行时，默认流程序会等待；在默认流执行函数时，非默认流的程序必须等待。**
+
+> 通过流实现内存分配
+
+`cudaMemcpyAsync`可以从主机到设备或从设备到主机异步复制内存。
+
+**与核函数的执行类似，`cudaMemcpyAsync`在默认情况下仅相对主机是异步的。默认情况下，它在默认流中执行，因此对于GPU上发生的其他CUDA操作而言，它是阻塞操作。**
+
+`cudaMemcpyAsync`函数将默认流作为可选的第5个参数。通过向其传递非默认流，可以将内存传输与其他默认流中发生的其他CUDA操作并发。
+
+```c
+cudaStream_t stream;
+cudaStreamCreate(&stream);
+cudaMemcpyAsync(&device_array[segmentOffset],
+               	&host_array[segmentOffset],
+                segmentSize,
+                cudaMemcpyHostToDevice,
+               	stream);
+```
+
+将`matrix_cudamalloc.cu`修改：
+
+```c
+#include <stdio.h>
+#include <assert.h>
+
+#define N 10000
+
+
+__global__ void gpu(int *a_gpu, int *b_gpu, int *c_gpu) {
+    int r = blockDim.x * blockIdx.x + threadIdx.x;
+    int c = blockDim.y * blockIdx.y + threadIdx.y;
+    if (r < N && c < N) {
+        c_gpu[r * N + c] = a_gpu[r * N + c] + b_gpu[r * N + c];
+    }
+}
+
+void cpu(int *a, int *b, int *c_cpu) {
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            c_cpu[r * N + c] = a[r * N + c] + b[r * N + c];
+        }
+    }
+}
+
+bool check(int *c_cpu, int *c_gpu) {
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            if (c_cpu[r * N + c] != c_gpu[r * N + c]) {
+                return false;
+            }
+        }
+        
+    }
+    return true;
+}
+
+
+inline cudaError_t checkCuda(cudaError_t result) {
+    if (result != cudaSuccess) {
+        fprintf(stderr, "CUDA runtime error: %s\n", cudaGetErrorString(result));
+        assert(result != cudaSuccess);
+    }
+    return result;
+}
+
+
+
+
+
+int main() {
+    int *a_cpu, *b_cpu, *a_gpu, *b_gpu, *c_cpu, *c_gpu, *c_gpu2cpu;
+    size_t size = N * N * sizeof(int);
+
+    cudaMallocHost(&a_cpu, size);
+    cudaMallocHost(&b_cpu, size);
+    cudaMallocHost(&c_cpu, size);
+    cudaMallocHost(&c_gpu2cpu, size);
+    cudaMalloc(&a_gpu, size);
+    cudaMalloc(&b_gpu, size);
+    cudaMalloc(&c_gpu, size);
+    
+    //初始化
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            a_cpu[r * N + c] = r;
+            b_cpu[r * N + c] = c;
+            c_cpu[r * N + c] = 0;
+            // c_gpu[r * N + c] = 0;
+            c_gpu2cpu[r * N + c] = 0;
+        }
+    }
+
+    cpu(a_cpu, b_cpu, c_cpu);
+
+
+
+    dim3 threads(16, 16, 1);
+    dim3 blocks((N + threads.x - 1) / threads.x, (N + threads.y - 1) / threads.y, 1);
+
+    cudaStream_t s1, s2, s3;
+    cudaStreamCreate(&s1);
+    cudaStreamCreate(&s2);
+    cudaStreamCreate(&s3);
+
+    //操纵GPU之前需要拷贝内存（新显卡不需要这项操作也是可以的）
+    cudaMemcpyAsync(a_gpu, a_cpu, size, cudaMemcpyHostToDevice, s1);
+    cudaMemcpyAsync(b_gpu, b_cpu, size, cudaMemcpyHostToDevice, s2);
+    gpu<<<blocks, threads>>>(a_gpu, b_gpu, c_gpu);
+
+    checkCuda(cudaGetLastError());
+
+    cudaMemcpyAsync(c_gpu2cpu, c_gpu, size, cudaMemcpyDeviceToHost, s3);
+    //将数据同步到我们的cpu上
+    cudaDeviceSynchronize();
+
+    check(c_cpu, c_gpu2cpu) ? printf("ok\n") : printf("error\n");
+
+
+    cudaStreamDestroy(s1);
+    cudaStreamDestroy(s2);
+    cudaFreeHost(a_cpu);
+    cudaFreeHost(b_cpu);
+    cudaFreeHost(c_cpu);
+    cudaFreeHost(c_gpu2cpu);
+    cudaFree(a_gpu);
+    cudaFree(b_gpu);
+    cudaFree(c_gpu);
+}
+```
+
+可以看到我们将内存拷贝的过程交给了流，通过CUDA性能分析工具分析了程序。单向的内存拷贝不会进行重叠，也就是说同一时间主机向设备或者设备向主机只能进行一次内存拷贝。
