@@ -864,3 +864,243 @@ int main() {
 ```
 
 可以看到我们将内存拷贝的过程交给了流，通过CUDA性能分析工具分析了程序。单向的内存拷贝不会进行重叠，也就是说同一时间主机向设备或者设备向主机只能进行一次内存拷贝。
+
+### CUDA共享内存
+
+共享内存其实所谓的`shared memory`，其能为**同一个线程块内所有线程共享**。共享内存是一种稀缺资源，若线程位于分配内存的线程块之外，则无法访问共享内存，且**此类内存在核函数执行完毕之后就会立即被释放**。共享内存带宽远高于全局内存（`global memory`），有助于优化性能。
+
+> 程序计时
+
+CUDA编程有专门用于计时的程序：
+
+```c
+cudaEvent_t startEvent, stopEvent;
+cudaEventCreate(&startEvent);
+cudaEventCreate(&stopEvent);
+cudaEventRecord(startEvent, 0);
+... //中间夹需要计算时间的程序
+cudaEventRecord(stopEvent, 0);
+//由于这个cudaEvent这个操作是异步的，所以需要Synchronize一下
+cudaEventSynchronize(stopEvent);
+cudaEventElapsedTime(&ms, startEvent, stopEvent);
+```
+
+> 共享内存使用
+
+我们使用一个矩阵转置的例子来学习一下：
+
+```c
+/* CUDA程序:矩阵转置实现 */
+
+#include <stdio.h>
+
+#define TILE_DIM 32 //假设每次能操纵的矩阵小块的宽和高为32
+#define BLOCK_SIZE 8 
+#define MX 2048
+#define MY 2048
+
+__global__ void transpose(float* outputdata, float* inputdata) {
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+
+    int w = gridDim.x * TILE_DIM;
+    if (x >= MX || y >= MY) return; 
+    for (int i = 0; i < TILE_DIM; i += BLOCK_SIZE) {
+        outputdata[x * w + y + i] = inputdata[(y + i) * w + x];
+    }
+}
+
+
+bool check(float *c_cpu, float *c_gpu) {
+    for (int r = 0; r < MX; r++) {
+        for (int c = 0; c < MY; c++) {
+            if (c_cpu[r * MX + c] != c_gpu[r * MY + c]) {
+                return false;
+            }
+        }
+        
+    }
+    return true;
+}
+
+
+int main() {
+    size_t size = MX * MY * sizeof(float);
+    float *H_idata, *H_odata, *D_idata, *D_odata, *res;
+  	float ms; //用于记录程序计算使用的时间
+    cudaMallocHost(&H_idata, size);
+    cudaMallocHost(&H_odata, size);
+    cudaMallocHost(&res, size);
+    cudaMalloc(&D_idata, size);
+    cudaMalloc(&D_odata, size);
+
+    dim3 threads(TILE_DIM, BLOCK_SIZE, 1); // 给定线程数为TILE_DIM * BLOCK_SIZE 
+    dim3 blocks((MX + TILE_DIM - 1) / threads.x, (MY + TILE_DIM - 1) / threads.y, 1);
+
+    for (int i = 0; i < MX; i++) {
+        for (int j = 0; j < MY; j++) {
+            H_idata[i * MY + j] = i * MY + j;
+            res[i * MY + j] = j * MY + i;
+        }
+    }
+		
+  	cudaEvent_t startEvent, stopEvent;
+		cudaEventCreate(&startEvent);
+		cudaEventCreate(&stopEvent);
+		cudaEventRecord(startEvent, 0);
+  	
+    cudaMemcpy(D_idata, H_idata, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(D_odata, H_odata, size, cudaMemcpyHostToDevice);
+		// 开始计时
+  	cudaEventRecord(startEvent, 0);
+  
+  	for (int i = 0; i < 100; i++) {
+      	transpose<<<blocks, threads>>>(D_odata, D_idata);
+    }
+  
+		// 停止计时
+  	cudaEventRecord(stopEvent, 0);
+  	// 异步操作等待同步
+  	cudaEventSynchronize(stopEvent);
+		cudaEventElapsedTime(&ms, startEvent, stopEvent);
+  
+  	//打印计算信息
+  	printf("%25s%25s\n", "Routine", "Bandwidth (GB/s)");
+  	printf("%20.2f\n", 2 * MX * MY * sizeof(float) * 1e-6 * 100 / ms);
+  
+    cudaMemcpy(H_odata, D_odata, size, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    check(res, H_odata) ? printf("ok") : printf("error");
+
+    cudaFreeHost(H_idata);
+    cudaFreeHost(H_odata);
+    cudaFree(D_idata);
+    cudaFree(D_odata);
+}
+```
+
+得到的带宽（global memory）计算出来为90GB/s左右。
+
+接下来，我们要使用`shared memory`来优化：
+
+```c
+/* CUDA程序:矩阵转置实现 */
+
+#include <stdio.h>
+
+#define TILE_DIM 32 //假设每次能操纵的矩阵小块的宽和高为32
+#define BLOCK_SIZE 8 
+#define MX 2048
+#define MY 2048
+
+__global__ void transpose2(float* outputdata, float* inputdata) {
+  	// 一个block内部的share memory有32个存储块
+    __shared__ float title[TILE_DIM][TILE_DIM];
+    int x = blockIdx.x * TILE_DIM + threadIdx.x;
+    int y = blockIdx.y * TILE_DIM + threadIdx.y;
+
+    int w = gridDim.x * TILE_DIM;
+    if (x >= MX || y >= MY) return; 
+    for (int i = 0; i < TILE_DIM; i += BLOCK_SIZE) {
+        title[threadIdx.y + i][threadIdx.x] = inputdata[(y + i) * w + x];
+    }
+    __syncthreads();
+    x = blockIdx.y * TILE_DIM + threadIdx.x;
+    y = blockIdx.x * TILE_DIM + threadIdx.y;
+    for (int i = 0; i < TILE_DIM; i += BLOCK_SIZE) {
+        outputdata[(y + i) * w + x] = title[threadIdx.x][threadIdx.y + i];
+    }
+}
+
+
+bool check(float *c_cpu, float *c_gpu) {
+    for (int r = 0; r < MX; r++) {
+        for (int c = 0; c < MY; c++) {
+            if (c_cpu[r * MX + c] != c_gpu[r * MY + c]) {
+                return false;
+            }
+        }
+        
+    }
+    return true;
+}
+
+
+int main() {
+    size_t size = MX * MY * sizeof(float);
+    float *H_idata, *H_odata, *D_idata, *D_odata, *res;
+    float ms; //用于记录程序计算使用的时间
+    cudaMallocHost(&H_idata, size);
+    cudaMallocHost(&H_odata, size);
+    cudaMallocHost(&res, size);
+    cudaMalloc(&D_idata, size);
+    cudaMalloc(&D_odata, size);
+
+    dim3 threads(TILE_DIM, BLOCK_SIZE, 1); // 给定线程数为TILE_DIM * BLOCK_SIZE 
+    dim3 blocks((MX + TILE_DIM - 1) / threads.x, (MY + TILE_DIM - 1) / threads.y, 1);
+
+    for (int i = 0; i < MX; i++) {
+        for (int j = 0; j < MY; j++) {
+            H_idata[i * MY + j] = i * MY + j;
+            res[i * MY + j] = j * MY + i;
+        }
+    }
+        
+    cudaEvent_t startEvent, stopEvent;
+    cudaEventCreate(&startEvent);
+    cudaEventCreate(&stopEvent);
+    cudaEventRecord(startEvent, 0);
+    
+    cudaMemcpy(D_idata, H_idata, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(D_odata, H_odata, size, cudaMemcpyHostToDevice);
+    // 开始计时
+    cudaEventRecord(startEvent, 0);
+    for (int i = 0; i < 100; i++) {
+        transpose2<<<blocks, threads>>>(D_odata, D_idata);
+    }
+
+    // 停止计时
+    cudaEventRecord(stopEvent, 0);
+    // 异步操作等待同步
+    cudaEventSynchronize(stopEvent);
+    cudaEventElapsedTime(&ms, startEvent, stopEvent);
+  
+    //打印计算信息
+    printf("%25s%25s\n", "Routine", "Bandwidth (GB/s)");
+    printf("%25s", "native transpose");
+    printf("%20.2f\n", 2 * MX * MY * sizeof(float) * 1e-6 * 100 / ms);
+  
+    cudaMemcpy(H_odata, D_odata, size, cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    check(res, H_odata) ? printf("ok") : printf("error");
+
+    cudaFreeHost(H_idata);
+    cudaFreeHost(H_odata);
+    cudaFree(D_idata);
+    cudaFree(D_odata);
+}
+```
+
+带宽（shared memory）来到了250GB/s左右。
+
+> 优化分析
+
+* 在这个优化后的CUDA程序中，使用了GPU的共享内存来实现矩阵转置操作。共享内存是每个block共享的内存空间，在block内的线程可以高效地进行数据交换和共享，从而提高并行计算效率。优化后的transpose2函数中，首先定义了一个大小为TILE_DIM x TILE_DIM的共享内存数组`title`，它用于暂存每个线程所需要的数据块。然后，将输入矩阵中的数据加载到共享内存中，其中每个线程负责加载一个数据块。接着，使用`__syncthreads()`进行同步，保证所有线程都已经加载完毕，然后再将共享内存中的数据写回到输出矩阵中，实现矩阵转置操作。这种优化的思路是将数据块加载到共享内存中，以减少对全局内存的访问次数，从而提高访存效率。由于共享内存的访问速度相比全局内存更快，且共享内存是block级别的，因此可以在一个block内高效地进行数据交换和共享，从而减少数据冗余和重复计算。
+
+* 1.在优化后的transpose2函数中，交换坐标是为了实现矩阵转置的正确性。由于共享内存中的数据是以“行优先”方式存储的，而输出矩阵需要以“列优先”方式存储，因此在将共享内存中的数据写回到输出矩阵时，需要进行坐标的交换。具体来说，原始的输入矩阵在全局内存中是按照行优先的方式存储的，即以连续的行数据存储。而共享内存`title`中加载的数据也是以行优先的方式存储的，因为每个线程在加载数据时是按照每一行的数据块来加载的。在共享内存中，`title[threadIdx.y][threadIdx.x]`保存的就是`inputdata[(y + threadIdx.y) * w + x + threadIdx.x]`的值，其中`threadIdx.y`表示行索引偏移，`threadIdx.x`表示列索引偏移。但是，输出矩阵需要以列优先的方式存储，即以连续的列数据存储。因此，我们在写回输出矩阵时需要将共享内存中的行数据按列的方式重新排列。为了实现这个转置过程，我们交换了`x`和`y`的值，并且在写回输出矩阵时，通过`outputdata[(y + i) * w + x]`将共享内存中的行数据转置为输出矩阵的列数据。
+
+* 整个过程可以用如下伪代码表示：
+
+```
+for each block in grid:
+    load data from global memory to shared memory (row-major order)
+    synchronize threads in the block
+    transpose data in shared memory (row-major to column-major)
+    write data back from shared memory to global memory (column-major order)
+```
+
+这样，通过对共享内存中的数据进行转置，就能够实现矩阵的正确转置操作。这种方式减少了全局内存的访问次数，并且通过共享内存的高速缓存和块内线程的并行计算，提高了整体矩阵转置的性能。
+
+> 存储块冲突
+
+共享内存一共有32个存储块，且内存读写可以同时运行。当并行线程尝试访问同一存储块内的内存时，我们将这种情况称为**存储块冲突**，该冲突将导致操作的顺序化。
