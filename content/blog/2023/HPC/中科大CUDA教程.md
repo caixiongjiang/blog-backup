@@ -1,7 +1,7 @@
 ---
 title: "中科大CUDA教程"
 date: 2023-07-19T18:18:05+08:00
-lastmod: 2023-07-25T09:19:06+08:00
+lastmod: 2023-08-02T09:19:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/CUDA_title.jpg"
 description: "CUDA硬件和逻辑设计，以及部分CUDA编程和优化"
@@ -414,7 +414,7 @@ SIMD可以认为是数据并行的分割：
 
 ### CUDA编程（1）
 
-> CUDA术语
+#### CUDA术语
 
 * Host：主机端，通常指cpu
 * Device：设备端，通常指gpu
@@ -425,7 +425,7 @@ SIMD可以认为是数据并行的分割：
 
 **一个Grid的的每个Block的线程数都是一样的，Block内部的每个线程可以进行同步，并访问共享存储器。**
 
-> 线程的层次
+#### 线程的层次
 
 一个Block可以是一维，二维，甚至是三维的。（例如，索引数组、矩阵、体）
 
@@ -485,7 +485,7 @@ int main() {
 }
 ```
 
-> 线程层次结合gpu存储层次加深对代码操作的硬件理解
+#### 线程层次结合gpu存储层次加深对代码操作的硬件理解
 
 * Device Code：
 
@@ -503,7 +503,7 @@ int main() {
 
 -- 主机端只能读写global和constant memory，global memory代表全局的存储器，constant memory代表常量的存储器。
 
-> CUDA内存传输
+#### CUDA内存传输
 
 * cudaMalloc()：在设备端分配global memory
 * cudaFree()：释放存储空间
@@ -529,11 +529,237 @@ cudaMemcpy(Md, M, size, cudaMemcpyHostToDevice);
 cudaMemcpy(P, Pd, size, cudaMemcpyDeviceToHost);
 ```
 
-> 矩阵相乘
+#### 矩阵相乘
 
+* CPU实现：
 
+```c
+void MatrixMultOnHost(float *M, float* N, flaot *P, int width) {
+  //i, j分别代表行和列，k代表当前进行计算的第一个矩阵行和第二个矩阵列的位置	
+  for (int i = 0; i < width; i++) {
+      	for (int j = 0; j < width; j++) {
+          	float sum = 0;
+          	for (int k = 0; k < width; ++k) {
+              	float a = M[i * width + k];
+              	float b = N[k * width + j];
+              	sum += a * b;
+            }
+          	P[i * width + j] = sum;
+        }
+    }
+}
+```
+
+* CUDA算法框架，三步走：
+
+```scss
+1.分配我们的内存（输入的变量和输出的结果等），并进行数据传输（Host和Device之间）
+2.在GPU上进行计算
+3.进行数据传输（结果），并释放相应的内存
+```
+
+* GPU的矩阵相乘的Kernel函数：
+
+```c
+__global__ void MatrixMulKernel(float *Md, float *Nd, float *Pd, int Width) {
+  	//2D threads
+  	int tx = threadIdx.x;
+  	int ty = threadIdx.y;
+  
+  	//每一个kernel线程计算一个输出
+  	float Pvalue = 0;
+  	
+  	for (int k = 0; k < Width; ++k) {
+      	float Md_element = Md[tx * Width + k];
+      	float Nd_element = Nd[k * Width + ty];
+      	Pvalue += Md_element + Nd_element;
+    }
+  	//写入结果矩阵
+  	P[tx * Width + ty] = Pvalue;
+}
+```
+
+上述矩阵相乘的样例特点：
+
+1.每个线程计算结果矩阵`Pd`的一个元素。
+
+2.每个线程需要读入矩阵`Md`的一行，读入矩阵`Nd`的一列，并为每对元素执行一次乘法和加法。（访存的次数和计算的次数基本接近1:1）
+
+3.矩阵的长度受限于一个线程块允许的线程数目。
+
+> 思考：在算法实现中最主要的性能问题是什么？
+
+主要的性能问题其实存在于访问存储的开销，所以算法的速度主要取决于访存的带宽（从Global Memory读数据的速度）。
 
 ### CUDA编程（2）
+
+#### 内置类型和函数
+
+* \_\_global\_\_：主机上调用，设备上执行。返回类型必须是`void`。
+* \_\_device\_\_：在设备上调用，在设备上执行。
+* \_\_host\_\_：在主机上调用，在主机上执行。
+
+> Global和device函数
+
+1. 尽量少用递归
+
+2. 不要使用静态变量
+
+3. 少用malloc
+
+4. 小心通过指针实现的函数调用
+
+> CUDA内置的向量的数据类型
+
+* Example：
+
+1. char[1~4]，uchar[1~4]
+2. short[1~4]，ushort[1~4] 
+3. int[1~4]，uint[1~4]
+4. long[1~4]，ulong[1~4]
+5. longlong[1~4]，ulonglong[1~4]
+6. float[1~4]
+7. double1，double2
+
+* 同时适用于host和device的代码，通过函数`make_<type name>构造`:
+
+```c
+int2 i2 = make_int2(1, 2); 
+float4 f4 = make_float4(1.0f, 2.0f, 3.0f, 4.0f);
+```
+
+* 通过`.x`，`.y`，`.z`和`.w`来访问：
+
+```c
+int2 i2 = make_int2(1, 2);
+int x = i2.x;
+int y = i2.y;
+```
+
+>  常用的数学函数
+
+* 开根号函数：`sqrt`、`rsqrt`
+* 指数函数：`Exp`、`log`
+* 三角函数：`sin`、`cos`、`tan`、`sincos`
+* 进/舍位函数：`trunc`，`ceil`，`floor`
+
+**cuda中还提供了一些内建的数学函数，比上面这些函数速度更快，但精度要低一些，适合于那种对精度要求不高，但运算速度要求比较高的场合**，这些函数都以双下划线`__`开头：`__expf`、`__logf`、`__sinf`、`__powf`等
+
+#### 线程同步
+
+> 块内线程可以同步
+
+* 调用`__syncthreads`创建一个barrier栅栏
+* 每个线程在调用点等待块内线程执行到这个地方，然后所有线程继续执行后续指令：
+
+```c
+Mds[i] = Md[j];
+__syncthreads();
+func(Mds[i], Mds[i + 1]);
+```
+
+> 线程同步带来的问题
+
+线程同步会带来部分线程的暂停，线程同步可能还会带来更严重的问题,死锁：
+
+```c
+//这里的部分线程执行的时候会在上面那个分支等待，而部分线程在下面等待，永远无法同步，造成死锁
+if (someFunc()) {
+  	__syncthreads();
+} else {
+  	__syncthreads();
+}
+```
+
+#### 线程调度
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img74.jpg)
+
+左边是一个的流多处理器（SM）的物理结构，右边为其逻辑结构。
+
+一个绿色的小块为一个流处理器（SP），在这个GPU（古老）中，8个SP组成一个SM。
+
+> Warp：块（Block）内的一组线程
+
+* 一个Warp有32个线程。
+* 运行于同一个SM，是线程调度的基本单位。
+* threadIdx值连续。
+* 硬件上保证了一个Warp内的线程是**天然同步**的。
+
+一个例子：
+
+```scss
+一个SM上，有3个Block，每一个Block被切分成了若干个warp：这时执行程序会根据warp为单位执行上下文切换等操作并进行调度。
+```
+
+* **在一个硬件上，warp的调度是0开销的！原因是一个warp需要的资源（上下文）在硬件结构上是不变的，只需要进行warp的切换。使用现实生活举例就是一个饭桌是固定的，只需要切换吃饭的那一伙人就OK。**
+
+* 在一个SM上，任一时刻只有一个warp在执行
+
+> 如果一个warp内的线程沿着不同的分支执行会有什么后果？
+
+这种情况为`divergent warp`，在不同的执行分支下，所有的warp的执行顺序是统一的，比如先执行if里面的内容，再执行else的内容。
+
+> 假设一个SM中只有8个SP，那么如何给线程分配SP？
+
+按照构想，其实也就是轮流使用的过程：warp内的32个线程按照8个线程一批的形式轮流使用SP。
+
+#### 存储模型
+
+> 寄存器
+
+每个SM内部的寄存器对线程来说是竞争模型。
+
+假设一个SM内部有8000个寄存器，768个线程，那么每个线程能分配到10个寄存器。超出限制后线程数将因为block的减少而减少。
+
+```
+Example：每个线程用到了11个寄存器，并且每个block含256个线程，那么一个SM可以驻扎多少个线程，一个SM可以驻扎多少个warp？warp数变少了意味着什么？
+```
+
+768/256 = 3， 原本可以分配3个block，但是由于寄存器数量不够用，最多只能分配给512个线程。
+那么线程数就会减少到512个，属于2个block，一个SM只能有512/32 = 16个。warp数量的减少意味着效率的降低，剩余的寄存器也会闲置。
+
+> 局部存储器（Local Memory）
+
+**局部存储器是存储于global memory（显存），作用域是每个thread，是线程私有的空间。**一般用于存储自动变量数组，通过常量索引访问，速度较慢。
+
+> 共享存储器（Shared Memory）
+
+其存储层次和cache是同一等级的，用户可进行编程，速度较快。
+
+> 全局存储器（Global Memory）
+
+全局存储器其实就是显存，长延时，可读写。如果是随机访问会非常影响性能，Host主机端可以读写。
+
+> 常量存储器（Constant Memory）
+
+短延时，高带宽，当所有线程访问同一位置时只读。存储于global memory但是有缓存，Host主机端可以读写，经常用于存储常量。
+
+那么如何去声明这些变量呢？
+
+| 变量声明                          | 存储器   | 作用域 | 生命期      |
+| --------------------------------- | -------- | ------ | ----------- |
+| 必须是单独的自动变量              | register | thread | kernel      |
+| 自动变量数组                      | local    | thread | kernel      |
+| \_\_shared\_\_ int sharedVar;     | shared   | block  | kernel      |
+| \_\_device\_\_ int globalVar;     | global   | grid   | application |
+| \_\_constant\_\_ int constantVar; | constant | grid   | application |
+
+> 变量的访问
+
+* global和constant变量：
+
+  * Host可以通过以下函数访问：
+
+    `cudaGetSymbolAddress()`：找到要访问变量的地址
+
+    `cudaGetSymbolSize()`：得到访问变量的大小
+
+    `cudaMemcpyToSymbol()`：将数据从Host内存复制到Device内存中的一个常量符号（Symbol）位置。
+
+    `cudaMemcpyFromSymbol()`：将数据从Device内存中的一个常量符号位置复制回到Host内存中
+
+  * Constans变量必须在函数外声明
 
 ### CUDA编程（3）
 
