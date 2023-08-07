@@ -763,8 +763,193 @@ Example：每个线程用到了11个寄存器，并且每个block含256个线程
 
 ### CUDA编程（3）
 
-### CUDA程序分析和调试工具
+#### 矩阵乘法重分析
+
+为了去除长度的限制，一般优化的做法就是将Pd矩阵拆成tile小块，把一个tile布置到一个block上，并通过`threadIdx`和`blockIdx`索引。
+
+修改后的代码如下：
+
+```c
+__global__ void MatrixMulKernel(float *Md, float *Nd, float *Pd, int width) {
+  	// 注意这里的行和列与CUDA中的相反的，不相反也没有关系
+		int Row = blockIdx.y * blockDim.y + threadIdx.y;
+  	int Col = blockIdx.x * blockDim.x + threadIdx.x;
+  	
+  	float Pvalue = 0;
+  	for (int k = 0; k < Width; ++k) {
+      	Pvalue += Md[Row * Width + k] * Nd[k * Width + Col];
+    }
+  	Pd[Row * Width + Col] = Pvalue;
+}
+```
+
+> CUDA中的索引和矩阵索引是如何做的？
+
+对于CUDA的global memory来说，没有二维数组的功能，所以行优先与列优先是无所谓。**所以在GPU的Global级别编程里没有交换循环顺序带来性能提升的说法。但是在CUDA的shared memory中，默认是按照行优先来计算的。所以变换成列优先会有很大的性能提升。**
+
+> 对于矩阵相乘时，Global memory的访问开销占大部分的时间，如何减少访问带来的消耗？
+
+其实我们在做矩阵乘法的时候，有很多重复的读取：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img75.jpg)
+
+*在两个位置进行计算的时候，读取的是同一列的数据，多了很多重复读取。*
+
+* 解决方法是每个输入元素被Width个线程读取，使用shared memory来减少global memory带宽需求：
+
+将Kernel函数拆分成多个阶段，每个阶段使用Md矩阵和Nd矩阵的子集累加Pd矩阵，这样每个阶段都有很好的数据局部性。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img76.jpg)
+
+*但由于shared memory的大小是有限的，我们将条块读取也需要分批读取。*
+
+代码如下：
+
+```c
+__global__ void MatrixMulKernel(float *Md, float *Nd, float *Pd, int width)
+{
+  	// 定义Shared memory存储Md和Nd的子集
+  	__shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
+  	__shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+  	
+  	int bx = blockIdx.x;
+  	int by = blockIdx.y;
+  	int tx = threadIdx.x;
+  	int ty = threadIdx.y;
+  	
+  	int Row = by * TILE_WIDTH + ty;
+  	int Col = bx * TILE_WIDTH + bx;
+  	
+  	float Pvalue = 0;
+  	// 将整个矩阵的运算分成Width / TILE_WIDTH 个阶段进行 
+  	for (int m = 0; m < Width / TILE_WIDTH; ++m) {
+      	// 从Md和Nd中各取一个元素存入shared memory
+      	// 从二维的角度来说为Md[Row][m * TILE_WIDTH + tx]，取第一个矩阵小块的行
+      	// 从二维的角度来说为Nd[m * TILE_WIDTH + ty][Col]，取第二个矩阵小块的列
+      	Mds[ty][tx] = Md[Row * Width + (m * TILE_WIDTH + tx)];
+      	Nds[ty][tx] = Nd[Col + (m * TILE_WIDTH + ty) * Width];
+      	// 等待所有block内的线程同步后才能进行乘累加
+      	__synchthreads();
+      	// 每一个TILE_WIDTH子集做乘累加
+      	for (int k = 0; k < TILE_WIDTH; ++k) {
+          	Pvalue += Mds[ty][k] + Nds[k][tx];
+        }
+      	// 防止上次的乘累加还没有完成，下一次从Global -> shared过程的元素对乘累加的结果造成影响
+      	__synchthreads();
+    }
+  	Pd[Row * Width + Col] = Pvalue;
+}
+```
+
+上述程序整体的流程：
+
+1. 计算结果矩阵Pd中元素的row和col来确定要取Md的哪一行，哪一列。
+2. 根据行列将其分为一个个小块，分别把小块放入Shared Memory
+3. 在Shared Memory进行计算
+4. 这里的同步体现在每一个小块上的读取是可以并行的，为O(1)。而且可以有效减少对global memory的访问次数
+
+>  那么如何选取TILE_WIDTH的数值
+
+一个块内的线程数是有上限的，TILE_WIDTH的数目不要大于BLock内部的线程数，同时Shared Memory大小是有极限的。更大的TILE_WIDTH将导致更少的Block数。
+
+原理如图所示：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img77.jpg)
+
+#### 原子函数
+
+CUDA中的原子操作本质上是让线程在某个内存单元完成读-修改-写的过程中不被其他线程打扰，它是一个独占的过程。
+
+举个例子来说：我有很多线程，每个线程计算出了一个结果, 我需要把所有的结果加在一起，就必须使用原子操作，不然就会发生错误。因为可能会发生一个线程正在读，另一个线程正在写的过程。所以就需要一个原子加的操作过程，如下图：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img78.jpg)
+
+* 算术运算：`atomicAdd()`,`atomicSub()`,`atomicExch()`,`atomicExch()`,`atomicMin()`,`atomicMax()`,`atomicDec()`,`atomicCAS()`
+* 位运算：`atomicAnd()`,`atomicOr`,`atomicXor()`
+
+这些原子函数具体的作用可以参考[CUDA原子操作详解及其适用场景 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/552049508)
+原子操作是比较耗时的，需要进入一个排队机制，尽量少用。
 
 ### CUDA程序基本优化
+
+`有效的数据并行算法` + `针对GPU架构特性的优化` = `最优性能`
+
+#### Parallel Reduction：并行规约
+
+下面是一个并行规约的过程：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img79.jpg)
+
+*也就是每两个数进行一次合并！*
+
+GPU程序如下：
+
+```c
+__global__ void parallel_reduction() {
+  	__shared__ float *partialSum;
+  	// Load into shared memory
+  	int t = threadIdx.x;
+  	for (int stride = 1; stride < blockDim.x; stride *= 2) {
+      	// 同步是为了每一层的规约做完了之后才能做下一层
+      	__syncthreads();
+      	if (t % (2 * stride) == 0) {
+          	partialSum[t] += partialSum[t + stride];
+        }
+    }
+}
+```
+
+以8个数为例，每次我们启动8个线程读取，在做加法时，实际上工作的线程只有4个线程，由于同步的需求，多余的线程就闲置了。
+
+也就是说n个元素实际上只需要n/2个线程，也就是说每轮所需要的线程数都减半！
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img80.jpg)
+
+按照上图的方式，我们可以通过改变索引来实现这个需求，那么我们stride的顺序从`1，2，4`变为了`4，2，1`：
+
+```c
+__global__ void parallel_reduction() {
+  	__shared__ float *partialSum;
+  	// Load into shared memory
+  	int t = threadIdx.x;
+  	for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+      	// 同步是为了每一层的规约做完了之后才能做下一层
+      	__syncthreads();
+      	if (t < stride) {
+          	partialSum[t] += partialSum[t + stride];
+        }
+    }
+}
+```
+
+![](/Users/caixiongjiang/Library/Application Support/typora-user-images/image-20230805171617104.png)
+
+**因为线程进行计算的方式进行了改变，因为warp是线程调度的基本单位，这样的排列方式可以让更多闲置的线程可以提前释放资源。**
+
+#### Warp分割
+
+> 线程块内如何划分warp
+
+通晓warp分割有助于减少分支发散，让warp尽早完工。
+
+* Block被划分为以32个连续的线程组叫一个warp
+* warp是最基本的调度单位
+* warp一直执行相同的指令
+* 每个线程只能执行自己的代码路径
+* 设备切换没有时间代价
+
+#### Memory Coalescing：访存合并
+
+#### Bank冲突
+
+#### SM资源动态分割
+
+#### 数据预读
+
+#### 指令混合
+
+#### 循环展开
+
+### 
 
 ### CUDA程序深入优化
