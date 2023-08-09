@@ -1,7 +1,7 @@
 ---
 title: "中科大CUDA教程"
 date: 2023-07-19T18:18:05+08:00
-lastmod: 2023-08-02T09:19:06+08:00
+lastmod: 2023-08-08T09:19:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/CUDA_title.jpg"
 description: "CUDA硬件和逻辑设计，以及部分CUDA编程和优化"
