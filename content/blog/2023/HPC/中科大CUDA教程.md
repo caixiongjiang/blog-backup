@@ -938,18 +938,243 @@ __global__ void parallel_reduction() {
 * 每个线程只能执行自己的代码路径
 * 设备切换没有时间代价
 
+### CUDA程序深入优化
+
+#### 访存造成的延迟
+
+> CPU-GPU数据传输最小化
+
+* `Host <--> Device`的数据传输带宽远低于global momory
+* 减少这种传输的方法：
+  * 1.中间数据直接在GPU分配，操作，释放
+  * 2.部分代码在GPU内部重复计算的开销可能比总线（pcie）传输的开销更大
+  * 3.如果将CPU代码移植到GPU，但是这个中间传输的过程还在，可能无法提升性能（此时中间传输的开销大于GPU计算的开销）
+* 组团传输
+  * 大块传输的性能好于小块
+* 内存传输与计算时间重叠
+  * 双缓存解决
+
 #### Memory Coalescing：访存合并
+
+**这被认为是最重要的影响因子！**
+
+GPU的`Global memory`的带宽虽然很高，但是延时是很高的。
+
+> 带宽和延时的理解：
+>
+> 带宽可以比喻为高速公路上的宽度，允许多少数据同时经过；延时可以比喻为在高速公路上开车的速度。
+
+
+
+**问题**：给定一个矩阵用`行优先`的方式存储于`global memory`，对一个thread来说比较适合的访存模式是什么？
+
+如果满足访问存储合并条件（相邻的线程访问相邻的内存），一个warp的线程访问Global memory的32、64或128位宽数据，结果只需要1或者2次传输。
+
+**Shared Memory **:
+
+* 比global memory快上百倍
+* 可以通过缓存数据减少global memory的访存次数
+* 线程可以通过shared memory协作
+* 用来避免不满足合并条件的访存：
+  * 读入shared memory重排顺序，从而支持合并寻址。
+
+> Shared Memory架构
+
+* 很多线程访问存储器
+  * 因此存储器被划分为banks
+  * 连续的32-bit访存被分配到连续的banks
+* 每个bank每个周期可以响应一个地址
+  * 如果有多个bank的话可以同时响应更多的地址申请
+* 对同一个bank进行多个并发访存将导致**bank冲突**
+  * 冲突的访存必须串行执行
 
 #### Bank冲突
 
+下面两种是不会发生bank冲突的内存访问方式：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img87.jpg)
+
+下面两种是容易发生bank冲突的内存访问方式：
+
+![](/Users/caixiongjiang/Library/Application Support/typora-user-images/image-20230811150006601.png)
+
+一般来说，多少路的bank冲突就会导致多少倍的性能下降。
+
+* 通常来说，没有bank冲突shared memory和registers一样快。
+* warp_serialize profiler分析器的可以反映冲突
+* 快速情况：
+  * half-warp内所有线程访问不同的banks，没有冲突
+  * half-warp内所有线程读取**同一地址**，没有冲突（广播）
+* 慢速情况：
+  * Bank Conflict：half-warp内多个线程访问**同一个bank**
+  * 访存必须串行化
+  * 代价 = 多个线程同时访问同一个bank的线程数的最大值
+
+> 举例：Transpose 矩阵转置
+
+* 每个线程块在矩阵的一个warp上操作
+* 原始版本存在对global memory按步长访问的情况
+
+原始矩阵转置：
+
+```c++
+__global__ void transposeNaive(float *odata, float *idata, int width, int height)
+{
+  	int xIndex = blockIdx.x * TILE_DIM + threadIdx.x;
+  	int yIndex = blockIdx.y * TILE_DIM + threadIdx.y;
+  
+  	int index_in = xIndex + width * yIndex; // [xIndex, yIndex]
+  	int index_out = yIndex + width * xIndex; // [yIndex, xIndex]
+
+  	odata[index_out] = idata[index_in];
+}
+```
+
+通过shared memory实现合并
+
+* 先将warp的多列元素存入shared memory，再以连续化的数据写入global memory
+* 需要同步__syncthreads()，因为线程需要用到其他线程存储到`shared memory`的数据。
+
+代码如下：
+
+```c++
+__global__ void transposeCoalesced(float *odata, float *idata, int width, int height)
+{
+  	__shared__ float tile[TILE_DIM][TILE_DIM];
+  	
+  	// 计算原矩阵的坐标 
+  	int xIndex = blockIdx.x * TILE_DIM + threadIdx.x;
+  	int yIndex = blockIdx.y * TILE_DIM + threadIdx.y;
+  	int index_in = xIndex * width + yIndex; // 行元素：[xIndex, yIndex]
+  	
+  	// 计算转置矩阵的坐标	
+  	xIndex = blockIdx.y * TILE_DIM + threadIdx.y;
+  	yIndex = blockIdx.x * TILE_DIM + threadIdx.x;
+  	int index_out = xIndex + yIndex * height; // 列元素：[xIndex, yIndex]
+  	
+  	//读入shared memory [y, x] = [xIndex, yIndex]
+  	tile[threadIdx.y][threadIdx.x] = idata[index_in];
+  	__syncthreads(); // 同步
+  	
+  	// [yIndex, xIndex] = [x, y]:[xIndex, yIndex]
+  	odata[index_out] = tile[threadIdx.x][threadIdx.y];
+}
+```
+
+现在还存在一个问题：
+
+* warp内的16$\times$16个floats存在于shared memory：
+  * 列中的数据存于相同的bank
+  * 读入warp -- 列数据存在16路的bank conflict
+* 解决方案 -- 填充shared memory数组
+  * `__shared__ float tile[TILE_DIM][TILE_DIM + 1]`
+  * 反对角线上的数据存于相同的bank
+
+使用Padding避免存储体冲突（填充数组），见下图：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img88.jpg)
+
+原来假设为4个bank，现在填充数组的时候多填充一位，但由于bank是按顺序读取，那么棕色的部分就会占位，但不会产生作用。所以Bank读取时不会产生冲突。
+
+#### CUDA的Texture纹理
+
+Texture是读入数据的一个对象。
+
+优点：
+
+* 数据被缓存：特别适用于无法合并访存的场合
+* 支持过滤：线性、双线性、三线性 插值
+* Wrap模式（针对越界寻址）：裁剪到边缘或重复
+* 一维、二维、三维寻址：以整数或归一化小数做为坐标
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/img89.jpg)
+
+Texture代码请查看《CUDA c program》
+
+> GPU硬件在数据的并行计算问题上，怎样可以达到很好的性能？
+
+* 有效利用并行性
+* 尽可能合并内存访问
+* 利用shared memory
+* 开发其他可存储空间（Texture、Constant）
+* 减少bank冲突
+
 #### SM资源动态分割
+
+SM资源分配使用木桶原理。谁的资源先达到瓶颈则减少该部分资源的分配。
+
+例子：
+
+假设我们有768个线程（3个block），每个线程用10个寄存器。然而寄存器的大小最多只支持10个寄存器，如果此时每个线程分配11个寄存器，那么可使用的寄存器数量不够，则会自动减少block数量，变为512个线程（2个block），每个线程使用的11个寄存器，剩余的线程就会变为空闲状态。
 
 #### 数据预读
 
+在一次global memory读操作和实际用到这个数据的语句中间，插入独立于以上数据的指令，可以隐藏访问延迟(并行)。
+
+```c
+float m = Md[i]; //Read global memory
+float f = a * b  + c * d; //执行指令，不依赖读内存的操作。该语句可以被隐藏延迟。
+float f2 = m * f;
+```
+
+> 引入预读操作的瓦片化matrix multiply
+
+```c
+// Load first tile into registers
+for (/*...*/)
+{
+  	// 将寄存器的内容读取到shared memory
+  	__syncthreads();
+  	// Load下一个tile到寄存器
+  	// 执行乘累加操作
+  	__syncthreads();
+}
+```
+
 #### 指令混合
+
+计算密集型任务很容易受限于带宽，典型的情况就是在存储器和执行配置优化完成后，考虑指令优化。
+
+比如：
+
+除以2^n，采用`>>n`
+
+以2^n求模，采用`&(2^n - 1)`
+
+避免double到float的类型自动转换
 
 #### 循环展开
 
-### 
+example:
 
-### CUDA程序深入优化
+```c
+for (int k = 0; k < BLOCK_SIZE; ++k) 
+{
+  	Pvalue += Ms[ty][k] * Ns[k][tx];
+}
+```
+
+虽然这条语句只是单纯的循环计算，但是系统需要做很多额外的操作。
+
+改成：
+
+```c
+Pvalue += Ms[ty][0] * Ns[0][tx] + 
+  				Ms[ty][1] * Ns[1][tx] + 
+  				...
+  				Ms[ty][15] * Ns[15][tx]; // BLOCK_SIZE = 16
+```
+
+去掉循环的好处：不再有循环计数器更新，不再有分支，常量索引（不再有地址运算）。
+
+编译自动实现：
+
+```c
+#pragma unroll BLOCK_SIZE
+for (int k = 0; k < BLOCK_SIZE; ++k) 
+{
+  	Pvalue += Ms[ty][k] * Ns[k][tx];
+}
+```
+
+缺点：可扩展性不强
