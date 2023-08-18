@@ -10,7 +10,7 @@ tags:
 categories:
 - 深度学习
 series:
-- 《MMcv系列》
+- 《MMCV系列》
 comment : true
 ---
 
