@@ -1,6 +1,6 @@
 ---
 title: "MMSegmentation初探"
-date: 2023-08-16T18:18:05+08:00
+date: 2023-08-15T18:18:05+08:00
 lastmod: 2023-08-16T09:19:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/mmcv/mmseg_title.jpg"

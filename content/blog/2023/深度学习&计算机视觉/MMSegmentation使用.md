@@ -439,3 +439,339 @@ cfg.dump('Zihao-Configs/ZihaoDataset_UNet_20230712.py')
 $ cd mmsegmentation
 $ python tools/train.py Zihao-Configs/ZihaoDataset_UNet_20230712.py
 ```
+
+* 训练结果（日志，模型权重文件）保存在config中指定的`work_dirs`目录下。
+
+#### 训练结果可视化
+
+* 设置Matplotlib中文字体:
+```python
+import matplotlib 
+import matplotlib.pyplot as plt
+from matplotlib import colors as mcolors
+import random
+
+matplotlib.rc("font",family='SimHei') # 中文字体
+```
+
+* 载入训练日志：
+进入`MMSegmentation`目录，运行脚本：
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# 日志文件路径
+log_path = './work_dirs/ZihaoDataset-UNet/20230818_210528/vis_data/scalars.json'
+
+with open(log_path, "r") as f:
+    json_list = f.readlines()
+
+# 将数据放入Pandas的DataFrame中
+df_train = pd.DataFrame()
+df_test = pd.DataFrame()
+for each in json_list[:-1]:
+    if 'aAcc' in each:
+        df_test = df_test.append(eval(each), ignore_index=True)
+    else:
+        df_train = df_train.append(eval(each), ignore_index=True)
+
+# 导出训练日志表格
+df_train.to_csv('图表/训练日志-训练集.csv', index=False)
+df_test.to_csv('图表/训练日志-测试集.csv', index=False)
+
+
+random.seed(124)
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan', 'black', 'indianred', 'brown', 'firebrick', 'maroon', 'darkred', 'red', 'sienna', 'chocolate', 'yellow', 'olivedrab', 'yellowgreen', 'darkolivegreen', 'forestgreen', 'limegreen', 'darkgreen', 'green', 'lime', 'seagreen', 'mediumseagreen', 'darkslategray', 'darkslategrey', 'teal', 'darkcyan', 'dodgerblue', 'navy', 'darkblue', 'mediumblue', 'blue', 'slateblue', 'darkslateblue', 'mediumslateblue', 'mediumpurple', 'rebeccapurple', 'blueviolet', 'indigo', 'darkorchid', 'darkviolet', 'mediumorchid', 'purple', 'darkmagenta', 'fuchsia', 'magenta', 'orchid', 'mediumvioletred', 'deeppink', 'hotpink']
+markers = [".",",","o","v","^","<",">","1","2","3","4","8","s","p","P","*","h","H","+","x","X","D","d","|","_",0,1,2,3,4,5,6,7,8,9,10,11]
+linestyle = ['--', '-.', '-']
+
+def get_line_arg():
+    '''
+    随机产生一种绘图线型
+    '''
+    line_arg = {}
+    line_arg['color'] = random.choice(colors)
+    # line_arg['marker'] = random.choice(markers)
+    line_arg['linestyle'] = random.choice(linestyle)
+    line_arg['linewidth'] = random.randint(1, 4)
+    # line_arg['markersize'] = random.randint(3, 5)
+    return line_arg
+
+# 绘制训练集损失曲线
+metrics = ['loss', 'decode.loss_ce', 'aux.loss_ce']
+plt.figure(figsize=(16, 8))
+
+x = df_train['step']
+for y in metrics:
+    try:
+        plt.plot(x, df_train[y], label=y, **get_line_arg())
+    except:
+        pass
+
+plt.tick_params(labelsize=20)
+plt.xlabel('step', fontsize=20)
+plt.ylabel('Loss', fontsize=20)
+plt.title('训练集损失函数', fontsize=25)
+
+plt.legend(fontsize=20)
+
+plt.savefig('图表/训练集损失函数.pdf', dpi=120, bbox_inches='tight')
+
+plt.show()
+
+# 绘制训练集准确率曲线
+metrics = ['decode.acc_seg', 'aux.acc_seg']
+
+plt.figure(figsize=(16, 8))
+
+x = df_train['step']
+for y in metrics:
+    try:
+        plt.plot(x, df_train[y], label=y, **get_line_arg())
+    except:
+        pass
+
+plt.tick_params(labelsize=20)
+plt.xlabel('step', fontsize=20)
+plt.ylabel('Metrics', fontsize=20)
+plt.title('训练集准确率', fontsize=25)
+
+plt.legend(fontsize=20)
+
+plt.savefig('图表/训练集准确率.pdf', dpi=120, bbox_inches='tight')
+
+plt.show()
+
+# 测试集评估指标折线
+print(df_test.columns)
+
+metrics = ['aAcc', 'mIoU', 'mAcc', 'mDice', 'mFscore', 'mPrecision', 'mRecall']
+
+plt.figure(figsize=(16, 8))
+
+x = df_test['step']
+for y in metrics:
+    try:
+        plt.plot(x, df_test[y], label=y, **get_line_arg())
+    except:
+        pass
+
+plt.tick_params(labelsize=20)
+plt.ylim([0, 100])
+plt.xlabel('step', fontsize=20)
+plt.ylabel('Metrics', fontsize=20)
+plt.title('测试集评估指标', fontsize=25)
+
+plt.legend(fontsize=20)
+
+plt.savefig('图表/测试集分类评估指标.pdf', dpi=120, bbox_inches='tight')
+
+plt.show()
+
+```
+
+* 训练过程训练集各类别评估指标
+
+```python
+from matplotlib import colors as mcolors
+import random
+random.seed(124)
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan', 'black', 'indianred', 'brown', 'firebrick', 'maroon', 'darkred', 'red', 'sienna', 'chocolate', 'yellow', 'olivedrab', 'yellowgreen', 'darkolivegreen', 'forestgreen', 'limegreen', 'darkgreen', 'green', 'lime', 'seagreen', 'mediumseagreen', 'darkslategray', 'darkslategrey', 'teal', 'darkcyan', 'dodgerblue', 'navy', 'darkblue', 'mediumblue', 'blue', 'slateblue', 'darkslateblue', 'mediumslateblue', 'mediumpurple', 'rebeccapurple', 'blueviolet', 'indigo', 'darkorchid', 'darkviolet', 'mediumorchid', 'purple', 'darkmagenta', 'fuchsia', 'magenta', 'orchid', 'mediumvioletred', 'deeppink', 'hotpink']
+markers = [".",",","o","v","^","<",">","1","2","3","4","8","s","p","P","*","h","H","+","x","X","D","d","|","_",0,1,2,3,4,5,6,7,8,9,10,11]
+linestyle = ['--', '-.', '-']
+
+def get_line_arg():
+    '''
+    随机产生一种绘图线型
+    '''
+    line_arg = {}
+    line_arg['color'] = random.choice(colors)
+    # line_arg['marker'] = random.choice(markers)
+    line_arg['linestyle'] = random.choice(linestyle)
+    line_arg['linewidth'] = random.randint(1, 4)
+    # line_arg['markersize'] = random.randint(3, 5)
+    return line_arg
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# 类别列表
+class_list = ['background', 'red', 'green', 'white', 'seed-black', 'seed-white']
+# 日志文件路径
+log_path = './work_dirs/ZihaoDataset-PSPNet/20230818_210528/20230818_210528.log'
+
+with open(log_path, 'r') as f:
+    logs = f.read()
+
+## 定义正则表达式
+import re
+import numpy as np
+
+def transform_table_line(raw):
+    raw = list(map(lambda x: x.split('|'), raw))
+    raw = list(map(
+      lambda row: list(map(
+          lambda col: float(col.strip()),
+          row
+      )),
+      raw
+    ))
+    return raw
+
+x = range(500, 40500, 500)
+
+metrics_json = {}
+for each_class in class_list: # 遍历每个类别
+    re_pattern = r'\s+{}.*?\|(.*)?\|'.format(each_class) # 定义该类别的正则表达式
+    metrics_json[each_class] = {}
+    metrics_json[each_class]['re_pattern'] = re.compile(re_pattern)
+
+# 匹配
+for each_class in class_list: # 遍历每个类别
+    find_string = re.findall(metrics_json[each_class]['re_pattern'], logs) # 粗匹配
+    find_string = transform_table_line(find_string) # 精匹配
+    metrics_json[each_class]['metrics'] = find_string
+
+print(metrics_json.keys())
+# dict_keys(['background', 'red', 'green', 'white', 'seed-black', 'seed-white'])
+
+# 查看某一类别的评估指标 IoU Acc Dice Fscore Precision Recall
+each_class = 'red'
+each_class_metrics = np.array(metrics_json[each_class]['metrics'])
+
+plt.figure(figsize=(16, 8))
+
+for idx, each_metric in enumerate(['IoU', 'Acc', 'Dice', 'Fscore', 'Precision', 'Recall']):
+
+    try:
+        plt.plot(x, each_class_metrics[:,idx], label=each_metric, **get_line_arg())
+    except:
+        pass
+
+plt.tick_params(labelsize=20)
+plt.ylim([0, 100])
+plt.xlabel('step', fontsize=20)
+plt.ylabel('Metrics', fontsize=20)
+plt.title('类别 {} 训练过程中，在测试集上的评估指标'.format(each_class), fontsize=25)
+
+plt.legend(fontsize=20)
+
+plt.savefig('图表/类别 {} 训练过程评估指标.pdf'.format(each_class), dpi=120, bbox_inches='tight')
+
+plt.show()
+
+# 注意x的元素个数，应和metrics_json[each_class]['metrics']元素个数一致，绘图才能成功
+
+# 查看每个类别的评估指标 IoU Acc Dice Fscore Precision Recall
+for each_class in class_list: # 遍历每个类别
+    each_class_metrics = np.array(metrics_json[each_class]['metrics'])
+    
+    plt.figure(figsize=(16, 8))
+
+    for idx, each_metric in enumerate(['IoU', 'Acc', 'Dice', 'Fscore', 'Precision', 'Recall']):
+
+        try:
+            plt.plot(x, each_class_metrics[:,idx], label=each_metric, **get_line_arg())
+        except:
+            pass
+
+    plt.tick_params(labelsize=20)
+    plt.ylim([0, 100])
+    plt.xlabel('step', fontsize=20)
+    plt.ylabel('Metrics', fontsize=20)
+    plt.title('图表/类别 {} 训练过程中，在测试集上的评估指标'.format(each_class), fontsize=25)
+
+    plt.legend(fontsize=20)
+
+    # plt.savefig('类别 {} 训练过程评估指标.pdf'.format(each_class), dpi=120, bbox_inches='tight')
+
+    plt.show()
+
+
+```
+
+* 测试集性能评估，采用命令行的方式进行：
+```shell
+python tools/test.py Zihao-Configs/ZihaoDataset_UNet_20230818.py ./work_dirs/ZihaoDataset-PSPNet/iter_40000.pth
+```
+
+* 速度指标-FPS（至少需要200张图片）
+```shell
+python tools/analysis_tools/benchmark.py Zihao-Configs/ZihaoDataset_PSPNet_20230818.py ./work_dirs/ZihaoDataset-PSPNet/iter_40000.pth
+```
+
+#### MMSegmentation推理预测
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+from mmseg.apis import init_model, inference_model, show_result_pyplot
+import mmcv
+import cv2
+
+
+# 模型 config 配置文件
+config_file = 'Zihao-Configs/ZihaoDataset_KNet_20230818.py'
+
+# 模型 checkpoint 权重文件
+checkpoint_file = 'checkpoint/Zihao_KNet.pth'
+
+# device = 'cpu'
+device = 'cuda:0'
+
+model = init_model(config_file, checkpoint_file, device=device)
+# 载入测试集图像
+img_path = 'Watermelon87_Semantic_Seg_Mask/img_dir/val/01bd15599c606aa801201794e1fa30.jpg'
+
+img_bgr = cv2.imread(img_path)
+result = inference_model(model, img_bgr)
+print(result.keys()) # ['seg_logits', 'pred_sem_seg']
+
+pred_mask = result.pred_sem_seg.data[0].cpu().numpy()
+print(np.unique(pred_mask)) # array([0, 1, 2, 3, 4, 5])
+
+# 可视化语义分割预测结果-（和原图并排显示）
+plt.figure(figsize=(14, 8))
+
+plt.subplot(1,2,1)
+plt.imshow(img_bgr[:,:,::-1])
+plt.axis('off')
+
+plt.subplot(1,2,2)
+plt.imshow(img_bgr[:,:,::-1])
+plt.imshow(pred_mask, alpha=0.6) # alpha 高亮区域透明度，越小越接近原图
+plt.axis('off')
+plt.savefig('outputs/K1-2.jpg')
+plt.show()
+
+# 加上图例的方法
+from mmseg.datasets import ZihaoDataset
+import numpy as np
+import mmcv 
+from PIL import Image
+
+# 获取类别名和调色板
+classes = ZihaoDataset.METAINFO['classes']
+palette = ZihaoDataset.METAINFO['palette']
+opacity = 0.15 # 透明度，越大越接近原图
+
+# 将分割图按调色板染色
+# seg_map = result[0].astype('uint8')
+seg_map = pred_mask.astype('uint8')
+seg_img = Image.fromarray(seg_map).convert('P')
+seg_img.putpalette(np.array(palette, dtype=np.uint8))
+
+from matplotlib import pyplot as plt
+import matplotlib.patches as mpatches
+plt.figure(figsize=(14, 8))
+img_plot = ((np.array(seg_img.convert('RGB')))*(1-opacity) + mmcv.imread(img_path)*opacity) / 255
+im = plt.imshow(img_plot)
+
+# 为每一种颜色创建一个图例
+patches = [mpatches.Patch(color=np.array(palette[i])/255., label=classes[i]) for i in range(len(classes))]
+plt.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., fontsize='large')
+
+plt.savefig('outputs/K1-6.jpg')
+plt.show()
+```
