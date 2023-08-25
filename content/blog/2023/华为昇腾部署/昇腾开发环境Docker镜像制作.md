@@ -108,6 +108,13 @@ $ apt-get install wget
 
 *注意不同的nnrt和toolkit版本的安装手册不同，请根据自己的版本进行选择！*
 
+* 安装`gcc`，`cmake`，`g++`，`unzip`等：
+```shell
+apt-get install -y gcc g++ make cmake zlib1g zlib1g-dev openssl libsqlite3-dev libssl-dev libffi-dev unzip pciutils net-tools libblas-dev gfortran libblas3
+```
+
+*ibsqlite3-dev需要在python安装之前安装，如果用户操作系统已经安装满足版本要求的python环境，在此之后再安装libsqlite3-dev，则需要重新编译python环境。*
+
 * 安装Python3.7.5：
 ```shell
 $ cd /downloads # 没有该目录则创建一个
@@ -138,10 +145,11 @@ source ~/.bashrc
 $ python3 --version
 $ pip3 --version
 ```
-* 安装`gcc`，`cmake`，`g++`，`unzip`等：
+* 更新pip版本:
 ```shell
-apt-get install -y gcc g++ make cmake zlib1g zlib1g-dev openssl libsqlite3-dev libssl-dev libffi-dev unzip pciutils net-tools libblas-dev gfortran libblas3
+pip3 install --upgrade pip
 ```
+
 * 安装一些常用的Python包：
 ```shell
 $ pip3 install attrs
@@ -197,4 +205,22 @@ $ docker exec -it <容器id> /bin/bash
 
 到此，对于一个华为昇腾开发环境的基础开发环境已经构建成功了！
 
+#### 验证命令行环境
+
+如果容器内的环境配置正确之后，我们在命令行输入`atc`是会返回信息的：
+```scss
+ATC start working now, please wait for a moment.
+...
+ATC run failed, Please check the detail log, Try 'atc --help' for more information
+E10007: [--framework] is required. The value must be [0(Caffe) or 1(MindSpore) or 3(TensorFlow) or 5(Onnx)].
+```
+
+但是目前返回的信息为：
+```scss
+/usr/local/Ascend/ascend-toolkit/7.0.RC1.alpha002/x86_64-linux/bin/atc.bin: error while loading shared libraries: libascend_hal.so: cannot open shared object file: No such file or directory
+```
+
+网上找到了解决方案：[https://bbs.huaweicloud.com/blogs/344623](https://bbs.huaweicloud.com/blogs/344623)
+
+按照它的方法操作了之后，成功了！
 
