@@ -104,7 +104,7 @@ $ apt-get install wget
 ```
 
 #### 容器内安装依赖
-按照`昇腾社区`开发环境需求：[https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/70RC1alpha002/softwareinstall/instg/instg_000026.html](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/70RC1alpha002/softwareinstall/instg/instg_000026.html)
+按照`昇腾社区`开发环境需求：[https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/70RC1alpha001/softwareinstall/instg/instg_000026.html](https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/70RC1alpha001/softwareinstall/instg/instg_000026.html)
 
 *注意不同的nnrt和toolkit版本的安装手册不同，请根据自己的版本进行选择！*
 
@@ -217,10 +217,34 @@ E10007: [--framework] is required. The value must be [0(Caffe) or 1(MindSpore) o
 
 但是目前返回的信息为：
 ```scss
-/usr/local/Ascend/ascend-toolkit/7.0.RC1.alpha002/x86_64-linux/bin/atc.bin: error while loading shared libraries: libascend_hal.so: cannot open shared object file: No such file or directory
+/usr/local/Ascend/ascend-toolkit/7.0.RC1.alpha001/x86_64-linux/bin/atc.bin: error while loading shared libraries: libascend_hal.so: cannot open shared object file: No such file or directory
 ```
 
 网上找到了解决方案：[https://bbs.huaweicloud.com/blogs/344623](https://bbs.huaweicloud.com/blogs/344623)
 
 按照它的方法操作了之后，成功了！
+
+#### 8月28日更新
+对于上述命令行转化工具`atc`的环境变量问题，在官方找到了正确的配置方法：
+* 以root用户安装Ascend-cann-toolkit包:
+```shell
+#若开发套件包Ascend-cann-toolkit在非昇腾设备上安装，则如下环境变量必须执行，用于设置动态链接库所在路径，否则无需执行
+export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/<arch>-linux/devlib:$LD_LIBRARY_PATH
+```
+* 以非root用户安装Ascend-cann-toolkit包：
+```shell
+#若开发套件包Ascend-cann-toolkit在非昇腾设备上安装，则如下环境变量必须执行，用于设置动态链接库所在路径，否则无需执行
+export LD_LIBRARY_PATH=${HOME}/Ascend/ascend-toolkit/latest/<arch>-linux/devlib:$LD_LIBRARY_PATH
+```
+**当然这只在当前页面有效果，所以还是将其配置到`~/.bashrc`中比较好！**
+
+目前还需要解决的问题，在python环境下无法初始化pyACL：
+```shell
+$ python3
+$ >>>import acl
+$ >>>acl.init()
+[ERROR]: stub library cannot be used for execution, please check your environment variables and compilation options to make sure you use the correct ACL library.
+100039
+```
+
 
