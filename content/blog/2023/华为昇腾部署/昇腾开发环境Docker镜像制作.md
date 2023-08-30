@@ -225,26 +225,39 @@ E10007: [--framework] is required. The value must be [0(Caffe) or 1(MindSpore) o
 按照它的方法操作了之后，成功了！
 
 #### 8月28日更新
-对于上述命令行转化工具`atc`的环境变量问题，在官方找到了正确的配置方法：
-* 以root用户安装Ascend-cann-toolkit包:
-```shell
-#若开发套件包Ascend-cann-toolkit在非昇腾设备上安装，则如下环境变量必须执行，用于设置动态链接库所在路径，否则无需执行
-export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/<arch>-linux/devlib:$LD_LIBRARY_PATH
-```
-* 以非root用户安装Ascend-cann-toolkit包：
-```shell
-#若开发套件包Ascend-cann-toolkit在非昇腾设备上安装，则如下环境变量必须执行，用于设置动态链接库所在路径，否则无需执行
-export LD_LIBRARY_PATH=${HOME}/Ascend/ascend-toolkit/latest/<arch>-linux/devlib:$LD_LIBRARY_PATH
-```
-**当然这只在当前页面有效果，所以还是将其配置到`~/.bashrc`中比较好！**
+对于上述命令行转化工具`atc`的环境变量问题，在华为官方issues维护人员的帮助下，解决了环境问题。
 
-目前还需要解决的问题，在python环境下无法初始化pyACL：
+**首先需要纠正的是nnrt和toolkit包是有重叠的。toolkit包含了离线推理和模型转换，而nnrt是只有包含离线推理的地方。**
+
+其次，在我自制的Docker镜像中发现需要设置驱动的库文件的环境变量。
+
+所以容器中`~/.bashrc`关于toolkit的配置为：
+```bashrc
+# toolkit
+. /usr/local/Ascend/ascend-toolkit/set_env.sh
+# driver
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/stub:＄LD_LIBRARY_PATH 
+export LD_LIBRARY_PATH-/usr/local/Ascend/driver/lib64/driver:＄LD_LIBRARY_PATH
+```
+
+顺便记录一下我的Docker启动命令：
 ```shell
-$ python3
-$ >>>import acl
-$ >>>acl.init()
-[ERROR]: stub library cannot be used for execution, please check your environment variables and compilation options to make sure you use the correct ACL library.
-100039
+sudo docker run -it -u root \
+--device=/dev/davinci0 \
+--device=/dev/davinci_manager \
+--device=/dev/devmm_svm \
+--device=/dev/hisi_hdc \
+-v /usr/local/dcmi:/usr/local/dcmi \
+-v /var/log/npu:/var/log/npu \
+-v /usr/local/Ascend/driver:/usr/local/Ascend/driver \
+-v /usr/slog:/usr/slog \
+-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ \
+-v /usr/local/Ascend/driver/tools/:/usr/local/Ascend/driver/tools/ \
+-v /usr/local/Ascend/add-ons/:/usr/local/Ascend/add-ons/ \
+-v /home/foot/caixj:/work_dir \
+caixj/ascend910b:python \
+/bin/bash
 ```
 
 
