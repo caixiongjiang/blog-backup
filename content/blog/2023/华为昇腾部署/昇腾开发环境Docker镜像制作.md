@@ -1,7 +1,7 @@
 ---
 title: "从零制作昇腾开发环境Docker镜像"
 date: 2023-08-21T18:18:05+08:00
-lastmod: 2023-08-22T09:19:06+08:00
+lastmod: 2023-08-28T09:19:06+08:00
 draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E9%AB%98%E6%80%A7%E8%83%BD%E8%AE%A1%E7%AE%97/huawei_title.jpg"
 description: "介绍适配昇腾环境的Docker镜像制作"
