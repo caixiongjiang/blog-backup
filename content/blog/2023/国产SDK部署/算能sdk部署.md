@@ -200,4 +200,47 @@ $ ./soc/yolov5s_demo --config=./cameras_yolov5.json
 ...
 ```
 
-## 
+### RTSP视频流输出画面
+
+算能为`sophon_pipeline`准备了可视化工具`pipeline_client`。由于本次是在ubuntu上启动客户端，编译相对简单。
+
+* 下载`pipeline_client`代码：
+
+```shell
+git clone https://github.com/sophon-ai-algo/pipeline_client.git
+```
+
+* 下载相关依赖：
+
+```shell
+ sudo apt install qtbase5-dev
+ sudo apt install libopencv-dev
+ sudo apt install ffmpeg
+ sudo apt install libavfilter-dev
+```
+
+* 在Linux下能找到默认的opencv库位置，不需要修改CMakeLists.txt，Windows端需要按照说明操作：[https://github.com/sophon-ai-algo/pipeline_client](https://github.com/sophon-ai-algo/pipeline_client)
+* 编译：
+
+```shell
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make -j4
+$ cd ..
+$ ./build/bin/pipeline_client # 启动客户端
+```
+
+系统会出现类似于如下的客户端画面：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E5%AE%9E%E4%B9%A0/img6.jpg)
+
+* RTSP需要配合一个`rtsp server`使用，先推流到`rtsp server`，`pipeline_client`再拉流获取画面。使用官网推荐的`rtsp server`:[https://github.com/bluenviron/mediamtx/releases](https://github.com/bluenviron/mediamtx/releases)，注意Linux x86_64机器需要选择下面这个包：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/%E5%AE%9E%E4%B9%A0/img7.jpg)
+
+* 现在`rtsp server`，`pipeline_client`，`sophon_pipeline`都已经准备完毕，接下来就可以测试输出画面了（注意`sophon_pipeline`在盒子端，`rtsp server`和`pipeline_client`在交叉编译端）：
+  * 在交叉编译端启动`rtsp server`，解压下好的文件，并执行`./mediamtx`，默认端口为`8544`，如果修改端口，则需要修改其中的配置文件`mediamtx.yml`文件，必须要确保启动的端口没有被其他应用占用。
+  * 运行`sophon-pipeline`例程程序，推流到指定rtsp地址：将编译好的配置文件`cameras_yolov5.json`的参数配置改为`rtsp://${ip}:8544/abc`，这里的ip是指交叉编译机器的ip地址。
+  * 运行`pipeline_client`，指定拉流地址为`rtsp://${ip}:8554/abc`，如果`pipeline_client`和`rtsp server`在一个机子上，ip可以直接用`127.0.0.1`或者`//localhost`代替。
+  * 稍等片刻，则可以看见画面。
