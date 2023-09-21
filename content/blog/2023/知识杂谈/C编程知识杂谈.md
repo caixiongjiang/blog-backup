@@ -110,3 +110,65 @@ int main() {
 在上述示例中，我们使用 `std::ifstream` 打开名为 "example.txt" 的文件，并按行读取其中的内容。如果成功打开文件，则逐行输出文件内容。如果无法打开文件，则输出错误消息。
 
 注意，`std::ifstream` 类位于 `<fstream>` 头文件中，因此在使用 `std::ifstream` 之前需要包含该头文件。
+
+#### std::make_shared && std::shared_ptr
+
+`std::make_shared` 和 `std::shared_ptr` 是 C++ 中用于管理共享所有权的智能指针。
+
+`std::shared_ptr` 是一个模板类，用于管理动态分配的对象的所有权。它允许多个 `std::shared_ptr` 共享同一个对象，并在最后一个引用被销毁时自动释放对象的内存。这种共享所有权的机制称为引用计数。
+
+`std::make_shared` 是一个模板函数，用于创建一个动态分配的对象并返回相应的 `std::shared_ptr` 智能指针。它能够在单个内存分配中同时创建对象和管理引用计数，从而提高了性能和内存利用率。
+
+使用场景：
+
+- 在需要多个智能指针共享同一个对象所有权的情况下，可以使用 `std::shared_ptr`。这样可以避免手动跟踪和释放对象的内存。
+- `std::make_shared` 通常用于创建动态分配的对象并返回相应的 `std::shared_ptr`。它提供了一种方便的方式来创建智能指针并避免显式地调用 `new` 进行对象分配。
+
+使用示例：
+
+```cpp
+#include <memory>
+
+int main() {
+    // 使用 std::shared_ptr 创建和管理对象
+    std::shared_ptr<int> ptr1(new int(42)); // 通过 new 创建对象，并手动管理内存
+    std::shared_ptr<int> ptr2 = ptr1; // 共享所有权
+    // ...
+
+    // 使用 std::make_shared 创建和管理对象
+    std::shared_ptr<int> ptr3 = std::make_shared<int>(42); // 创建对象并管理内存
+    std::shared_ptr<int> ptr4 = ptr3; // 共享所有权
+    // ...
+
+    return 0;
+}
+```
+
+*无论是使用 `new` 还是 `std::make_shared`，都可以使用 `std::shared_ptr` 来管理对象的所有权。然而，使用 `std::make_shared` 通常更为推荐，因为它能够提供更好的性能和内存管理。*
+
+#### C++工程的环境
+
+对于日常开发来说，我们在开发C++工程时，通常只需要将环境安装在本机上，这时候将代码发给别人时，则需要一个代码包和一个Docker启动镜像，里面包含了需要的环境。这对于部署来说是非常重的，那如何摆脱这个Docker镜像，只需要一个c++编译的基础环境。
+
+假设要使用OpenCV包：
+
+1. 下载OpenCV源代码
+2. 解压源代码到工程中
+3. 配置CMake，生成适合该平台的构建文件，指定生成的库文件路径。（该步骤中不同的环境包有不同的构建方式）
+
+```shell
+$ cd opencv
+$ mkdir build
+$ cd build
+$ cmake ..
+```
+
+4. 编译安装
+
+```shell
+$ make
+$ sudo make install 
+```
+
+5. OpenCV库文件复制到您的工程中：将生成的OpenCV库文件复制到您的工程目录中的合适位置。您可以将库文件放在与您的C++代码文件相同的目录中，或者创建一个名为`lib`的子目录，并将库文件放在其中。
+6. 设置编译器选项：在您的C++代码文件中，使用`#include`指令包含OpenCV的头文件，并在CMake或者Makefile工具添加适当的库路径和库文件名称。
