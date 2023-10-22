@@ -54,7 +54,7 @@ cd mmsegmentation
 ```
 * 源码安装：
 ```shell
-pip install -v -e
+pip install -v -e .
 ```
 
 #### 检查安装是否成功
