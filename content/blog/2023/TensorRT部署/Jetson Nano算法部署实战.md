@@ -416,8 +416,6 @@ DeepStream是一种高性能、低延迟的边缘智能视频分析和处理平�
 视频流实例分割：[deepstream-segmask](https://github.com/NVIDIA-AI-IOT/deepstream_python_apps/tree/master/apps/deepstream-segmask)
 [官方模型config文件参数设置](https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_plugin_gst-nvinfer.html#gst-nvinfer-file-configuration-specifications)
 
-按照官方的示例按照自己的模型和需求写了一个示例，但是没法跑起来，目前看是ONNX文件的问题，但主要的流程都是正确的。（使用DeepStream处理是模型推理使用TensorRT的推理引擎实现的）
-
 #### Jetson-FastSegFormer
 
 这是我在Jetson Nano上使用`ONNXRuntime-gpu`和`TensorRT`以及`DeepStream`，可以在这里访问：[https://github.com/caixiongjiang/FastSegFormer-pyqt/tree/main/jetson-FastSegFormer](https://github.com/caixiongjiang/FastSegFormer-pyqt/tree/main/jetson-FastSegFormer)
