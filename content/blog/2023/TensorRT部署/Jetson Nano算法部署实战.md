@@ -446,11 +446,11 @@ DeepStream是一种高性能、低延迟的边缘智能视频分析和处理平�
       <td rowspan="10" style="text-align: center;"> 0.4716 TFLOPS</td>
       <td rowspan="10" style="text-align: center;">FP16</td>
       <td rowspan="2" style="text-align: center;">Single frame</td>
-      <td style="text-align: center;">7.02</td>
+      <td style="text-align: center;">10</td>
 	</tr>
 	<tr>
 	    <td style="text-align: center;">TensorRT</td>
-      <td style="text-align: center;">11.50</td>
+      <td style="text-align: center;">15</td>
 	</tr>
 	<tr>
       <td style="text-align: center;">ONNXRuntime</td>
@@ -464,18 +464,18 @@ DeepStream是一种高性能、低延迟的边缘智能视频分析和处理平�
   <tr>
 	    <td style="text-align: center;">TensorRT</td>
       <td style="text-align: center;">DeepStream</td>
-      <td style="text-align: center;">--</td>
+      <td style="text-align: center;">23</td>
 	</tr>
   <tr>
 	    <td rowspan="5" style="text-align: center;">CSI Camera Detection</td>
       <td rowspan="5" style="text-align: center;">$1280\times 720$</td>
       <td style="text-align: center;">ONNXRuntime</td>
       <td rowspan="2" style="text-align: center;">Single frame</td>
-      <td style="text-align: center;">5</td>
+      <td style="text-align: center;">8</td>
 	</tr>
   <tr>
       <td style="text-align: center;">TensorRT</td>
-      <td style="text-align: center;">7</td>
+      <td style="text-align: center;">12</td>
 	</tr>
   <tr>
       <td style="text-align: center;">ONNXRuntime</td>
@@ -489,12 +489,10 @@ DeepStream是一种高性能、低延迟的边缘智能视频分析和处理平�
   <tr>
       <td style="text-align: center;">TensorRT</td>
       <td style="text-align: center;">DeepStream</td>
-      <td style="text-align: center;">--</td>
+      <td style="text-align: center;">20</td>
 	</tr>
 </table>
 ~:Can't run dual-threaded acceleration on Jetson nano (4G) because of lack of memory.
-
---:Currently not achieved.
 
 
 
