@@ -237,7 +237,7 @@ E10007: [--framework] is required. The value must be [0(Caffe) or 1(MindSpore) o
 . /usr/local/Ascend/ascend-toolkit/set_env.sh
 # driver
 export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/stub:＄LD_LIBRARY_PATH 
-export LD_LIBRARY_PATH-/usr/local/Ascend/driver/lib64/driver:＄LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:＄LD_LIBRARY_PATH
 ```
 
 顺便记录一下我的Docker启动命令：
