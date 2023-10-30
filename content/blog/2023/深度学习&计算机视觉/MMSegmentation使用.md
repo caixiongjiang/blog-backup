@@ -287,40 +287,83 @@ __all__ = [
 ]
 ```
 
-* 准备pipeline配置文件：
+#### Config配置文件编写
 
-这个配置文件包含了这些参数的配置：
-```scss
-1.数据集路径
-2.预处理
-3.后处理
-4.DataLoader
-5.测试集评估指标
+* 定义数据集类：
+在`mmseg/datasets`目录下新建一个数据集配置文件，我这里命名为`JarsonCai.py`，内容如下:
+```python
+from mmseg.registry import DATASETS
+from .basesegdataset import BaseSegDataset
+
+@DATASETS.register_module()
+class JarsonCaiDataset(BaseSegDataset):
+    # 类别和对应的RGB配色
+    METAINFO = {
+        'classes': ['background', 'rotten', 'navel deformation', 'mild pitting', 'severe pitting', 'severe oil spotting'],
+        'palette': [[127, 127, 127], [200, 0, 0], [0, 200, 0], [144, 238, 144], [30, 30, 30], [251, 189, 8]]
+    }
+    
+    # 指定图像扩展名、标注扩展名
+    def __init__(self,
+                 seg_map_suffix=".png", # 标注mask图像的格式
+                 reduce_zero_label=False, # 类别ID为0的类别是否需要除去
+                 **kwargs) -> None:
+        super().__init__(
+            seg_map_suffix=seg_map_suffix,
+            reduce_zero_label=reduce_zero_label,
+            **kwargs)
+```
+* 注册数据集配置文件：
+在`mmseg/datasets/__init__.py`中增加：
+```python
+# 增加自己的数据集配置脚本
+from .JaronCai import JarsonCaiDataset
+
+# yapf: enable
+__all__ = [
+    'BaseSegDataset', 'BioMedical3DRandomCrop', 'BioMedical3DRandomFlip',
+    'CityscapesDataset', 'PascalVOCDataset', 'ADE20KDataset',
+    'PascalContextDataset', 'PascalContextDataset59', 'ChaseDB1Dataset',
+    'DRIVEDataset', 'HRFDataset', 'STAREDataset', 'DarkZurichDataset',
+    'NightDrivingDataset', 'COCOStuffDataset', 'LoveDADataset',
+    'MultiImageMixDataset', 'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset',
+    'LoadAnnotations', 'RandomCrop', 'SegRescale', 'PhotoMetricDistortion',
+    'RandomRotate', 'AdjustGamma', 'CLAHE', 'Rerange', 'RGB2Gray',
+    'RandomCutOut', 'RandomMosaic', 'PackSegInputs', 'ResizeToMultiple',
+    'LoadImageFromNDArray', 'LoadBiomedicalImageFromFile',
+    'LoadBiomedicalAnnotation', 'LoadBiomedicalData', 'GenerateEdge',
+    'DecathlonDataset', 'LIPDataset', 'ResizeShortestEdge',
+    'BioMedicalGaussianNoise', 'BioMedicalGaussianBlur',
+    'BioMedicalRandomGamma', 'BioMedical3DPad', 'RandomRotFlip',
+    'SynapseDataset', 'REFUGEDataset', 'MapillaryDataset_v1',
+    'MapillaryDataset_v2', 'Albu', 'LEVIRCDDataset',
+    'LoadMultipleRSImageFromFile', 'LoadSingleRSImageFromFile',
+    'ConcatCDInput', 'BaseCDDataset', 'DSDLSegDataset', 'BDD100KDataset', 'JarsonCaiDataset' # 新增的数据集配置文件名字
+]
 ```
 
-文件的路径为：`configs/_base_/datasets/`下
+#### 编写Pipeline配置文件
 
-给一个样例文件：
+该配置文件主要内容为：数据集路径、预处理、后处理、DataLoader、测试集评估指标
+
+在`configs/_base_/datasets`目录下新建一个配置文件`JarsonCaiDataset_pipeline.py`，内容如下：
 ```python
-# 数据处理 pipeline
-# 同济子豪兄 2023-6-28
-
 # 数据集路径
-dataset_type = 'ZihaoDataset' # 数据集类名
-data_root = 'Watermelon87_Semantic_Seg_Mask/' # 数据集路径（相对于mmsegmentation主目录）
+dataset_type = 'JarsonCaiDataset' # 数据集类名
+data_root = 'NavelOrange-5.3k' # 数据集路径（相对于mmsegmentation主目录）
 
 # 输入模型的图像裁剪尺寸，一般是 128 的倍数，越小显存开销越少
-crop_size = (512, 512)
+crop_size = (128, 128)
 
 # 训练预处理
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
-    dict(
-        type='RandomResize',
-        scale=(2048, 1024),
-        ratio_range=(0.5, 2.0),
-        keep_ratio=True),
+    # dict(
+    #     type='RandomResize',
+    #     scale=(2048, 1024),
+    #     ratio_range=(0.5, 2.0),
+    #     keep_ratio=True),
     dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75),
     dict(type='RandomFlip', prob=0.5),
     dict(type='PhotoMetricDistortion'),
@@ -330,7 +373,7 @@ train_pipeline = [
 # 测试预处理
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='Resize', scale=(2048, 1024), keep_ratio=True),
+    # dict(type='Resize', scale=(2048, 1024), keep_ratio=True),
     dict(type='LoadAnnotations'),
     dict(type='PackSegInputs')
 ]
@@ -355,7 +398,7 @@ tta_pipeline = [
 
 # 训练 Dataloader
 train_dataloader = dict(
-    batch_size=2,
+    batch_size=8,
     num_workers=2,
     persistent_workers=True,
     sampler=dict(type='InfiniteSampler', shuffle=True),
@@ -390,12 +433,16 @@ val_evaluator = dict(type='IoUMetric', iou_metrics=['mIoU', 'mDice', 'mFscore'])
 test_evaluator = val_evaluator
 ```
 
-* 载入模型配置文件(这里使用UNet为例)：
+#### 编写模型配置文件生成脚本
+
+* 新建`JarsonCai-Configs`文件夹
+
+* 编写配置融合脚本：
 ```python
 from mmengine import Config
 # 选择的模型文件具有不同的骨干网络等，参考官方代码库的README
-cfg = Config.fromfile('./configs/unet/unet-s5-d16_fcn_4xb4-160k_cityscapes-512x1024.py')
-dataset_cfg = Config.fromfile('./configs/_base_/datasets/ZihaoDataset_pipeline.py')
+cfg = Config.fromfile('./configs/unet/unet-s5-d16_fcn_4xb4-160k_cityscapes-512x1024.py') # 找到内置的模型配置文件
+dataset_cfg = Config.fromfile('./configs/_base_/datasets/JarsonCai_pipeline.py')
 cfg.merge_from_dict(dataset_cfg) # 进行配置信息字典融合
 
 # 修改config文件的配置信息
@@ -414,10 +461,10 @@ cfg.model.decode_head.num_classes = NUM_CLASS
 cfg.model.auxiliary_head.num_classes = NUM_CLASS
 
 # 训练 Batch Size
-cfg.train_dataloader.batch_size = 4
+cfg.train_dataloader.batch_size = 8
 
 # 结果保存目录
-cfg.work_dir = './work_dirs/ZihaoDataset-UNet'
+cfg.work_dir = './work_dirs/JarsonCaiDataset-UNet'
 
 # 模型保存与日志记录
 cfg.train_cfg.max_iters = 40000 # 训练迭代次数
@@ -431,7 +478,140 @@ cfg.default_hooks.checkpoint.save_best = 'mIoU' # 保留指标最高的模型权
 cfg['randomness'] = dict(seed=0)
 
 # 保存最终的配置文件
-cfg.dump('Zihao-Configs/ZihaoDataset_UNet_20230712.py') 
+cfg.dump('JarsonCai-Configs/JarsonCaiDataset_UNet_20231023.py') 
+```
+**需要特别注意的是，该部分关于数据集和model的类别头的修改需要参考官方导入的配置文件，举个例子：**
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/deep-learning%26computer-vision/img119.jpg)
+
+bisenetv2.py关于model的内容如下:
+```python
+model = dict(
+    type='EncoderDecoder',
+    data_preprocessor=data_preprocessor,
+    pretrained=None,
+    backbone=dict(
+        type='BiSeNetV2',
+        detail_channels=(64, 64, 128),
+        semantic_channels=(16, 32, 64, 128),
+        semantic_expansion_ratio=6,
+        bga_channels=128,
+        out_indices=(0, 1, 2, 3, 4),
+        init_cfg=None,
+        align_corners=False),
+    decode_head=dict(
+        type='FCNHead',
+        in_channels=128,
+        in_index=0,
+        channels=1024,
+        num_convs=1,
+        concat_input=False,
+        dropout_ratio=0.1,
+        num_classes=19,
+        norm_cfg=norm_cfg,
+        align_corners=False,
+        loss_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+    auxiliary_head=[
+        dict(
+            type='FCNHead',
+            in_channels=16,
+            channels=16,
+            num_convs=2,
+            num_classes=19,
+            in_index=1,
+            norm_cfg=norm_cfg,
+            concat_input=False,
+            align_corners=False,
+            loss_decode=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+        dict(
+            type='FCNHead',
+            in_channels=32,
+            channels=64,
+            num_convs=2,
+            num_classes=19,
+            in_index=2,
+            norm_cfg=norm_cfg,
+            concat_input=False,
+            align_corners=False,
+            loss_decode=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+        dict(
+            type='FCNHead',
+            in_channels=64,
+            channels=256,
+            num_convs=2,
+            num_classes=19,
+            in_index=3,
+            norm_cfg=norm_cfg,
+            concat_input=False,
+            align_corners=False,
+            loss_decode=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+        dict(
+            type='FCNHead',
+            in_channels=128,
+            channels=1024,
+            num_convs=2,
+            num_classes=19,
+            in_index=4,
+            norm_cfg=norm_cfg,
+            concat_input=False,
+            align_corners=False,
+            loss_decode=dict(
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+    ]）
+```
+
+cityscapes_1024x1024.py 内容如下：
+```python
+_base_ = './cityscapes.py'
+crop_size = (1024, 1024)
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations'),
+    dict(
+        type='RandomResize',
+        scale=(2048, 1024),
+        ratio_range=(0.5, 2.0),
+        keep_ratio=True),
+    dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75),
+    dict(type='RandomFlip', prob=0.5),
+    dict(type='PhotoMetricDistortion'),
+    dict(type='PackSegInputs')
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='Resize', scale=(2048, 1024), keep_ratio=True),
+    # add loading annotation after ``Resize`` because ground truth
+    # does not need to do resize data transform
+    dict(type='LoadAnnotations'),
+    dict(type='PackSegInputs')
+]
+train_dataloader = dict(dataset=dict(pipeline=train_pipeline))
+val_dataloader = dict(dataset=dict(pipeline=test_pipeline))
+test_dataloader = val_dataloader
+
+val_evaluator = dict(type='IoUMetric', iou_metrics=['mIoU'])
+test_evaluator = val_evaluator
+```
+
+可以看到该模型有很多个损失计算头，所以我进行修改的地方需要变为：
+```python
+# 修改config文件的配置信息
+NUM_CLASS = 6
+cfg.model.data_preprocessor.size = cfg.crop_size
+
+# 单卡训练时，需要把 SyncBN 改成 BN
+cfg.norm_cfg = dict(type='BN', requires_grad=True) # 只使用GPU时，BN取代SyncBN
+
+
+# 模型 decode/auxiliary 输出头，指定为类别个数
+cfg.model.decode_head.num_classes = NUM_CLASS
+cfg.model.auxiliary_head[0]['num_classes'] = NUM_CLASS
+cfg.model.auxiliary_head[1]['num_classes'] = NUM_CLASS
+cfg.model.auxiliary_head[2]['num_classes'] = NUM_CLASS
 ```
 
 * 按照最终配置文件进行训练
