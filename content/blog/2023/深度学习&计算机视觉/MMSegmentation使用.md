@@ -471,9 +471,9 @@ df_train = pd.DataFrame()
 df_test = pd.DataFrame()
 for each in json_list[:-1]:
     if 'aAcc' in each:
-        df_test = df_test.append(eval(each), ignore_index=True)
+        df_test = df_test._append(eval(each), ignore_index=True)
     else:
-        df_train = df_train.append(eval(each), ignore_index=True)
+        df_train = df_train._append(eval(each), ignore_index=True)
 
 # 导出训练日志表格
 df_train.to_csv('图表/训练日志-训练集.csv', index=False)
@@ -694,6 +694,12 @@ for each_class in class_list: # 遍历每个类别
 ```shell
 python tools/test.py Zihao-Configs/ZihaoDataset_UNet_20230818.py ./work_dirs/ZihaoDataset-PSPNet/iter_40000.pth
 ```
+
+* 获取参数量、计算量：
+```python
+python tools/analysis_tools/get_flops.py ${CONFIG_FILE} --shape ${INPUT_SHAPE}
+```
+*注意运行上述命令时，需要先修改get-flops.py的87行为` outputs = get_model_complexity_info(model,inputs=data['inputs'],show_table=False,show_arch=False)`*
 
 * 速度指标-FPS（至少需要200张图片）
 ```shell
