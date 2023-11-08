@@ -172,3 +172,38 @@ $ sudo make install
 
 5. OpenCV库文件复制到您的工程中：将生成的OpenCV库文件复制到您的工程目录中的合适位置。您可以将库文件放在与您的C++代码文件相同的目录中，或者创建一个名为`lib`的子目录，并将库文件放在其中。
 6. 设置编译器选项：在您的C++代码文件中，使用`#include`指令包含OpenCV的头文件，并在CMake或者Makefile工具添加适当的库路径和库文件名称。
+
+#### C++中的各种变量类型
+
+* 最基础的类型：
+  * bool
+  * char
+  * unsigned short int
+  * short int
+  * unsigned long int
+  * long int
+  * int（16位）
+  * int（32位）
+  * unsigned int（16位）
+  * unsigned int（32位）
+  * float
+  * double
+* 根据C++中的位数分：
+  * Int8 - 8位int
+  * Int16 - 16位int
+  * Int32 - 32位int
+  * Int64 - 64位int
+  * UInt8 - 无符号8位int
+  * UInt16 - 无符号16位int
+  * UInt32 - 无符号32位int
+  * UInt64 - 无符号64位int
+* int_t同类：
+  * int8_t      : typedef signed char;
+  *  uint8_t    : typedef unsigned char;
+  *  int16_t    : typedef signed short ;
+  *  uint16_t  : typedef unsigned short ;
+  *  int32_t    : typedef signed int;
+  *  uint32_t  : typedef unsigned int;
+  *  int64_t    : typedef signed  long long;
+  *  uint64_t  : typedef unsigned long long;
+    
