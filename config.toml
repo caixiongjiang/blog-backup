@@ -83,14 +83,10 @@ name = "GitHub"
 url = "https://github.com/caixiongjiang"
 weight = 2
 [[menu.footer]]
-name = "MiFeng"
-url = "https://jarson-cai.gitee.io/jarson-cai-blog"
-weight = 3
-[[menu.footer]]
 name = "Email"
-url = "nau_cxj@163.com"
-weight = 4
+url = "mailto:nau_cxj@163.com"
+weight = 3
 [[menu.footer]]
 name = "Leetcode"
 url = "https://leetcode-cn.com/u/cai-xiong-jiang/"
-weight = 5
+weight = 4
