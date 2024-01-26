@@ -206,4 +206,55 @@ $ sudo make install
   *  uint32_t  : typedef unsigned int;
   *  int64_t    : typedef signed  long long;
   *  uint64_t  : typedef unsigned long long;
-    
+  
+#### weak_ptr
+
+`std::weak_ptr` 是 C++ 标准库中的一个智能指针，它是一种不拥有所指向对象的智能指针。`std::weak_ptr` 对象不会增加 `std::shared_ptr` 所指向对象的引用计数。这意味着，即使 `std::shared_ptr` 对象的引用计数变为零，所指向的对象也不会被销毁。
+
+`std::weak_ptr` 的主要用途是打破 `std::shared_ptr` 的环形引用（circular references），这在使用 `std::shared_ptr` 时可能会导致内存泄漏。当两个对象相互引用，并且它们的 `std::shared_ptr` 引用计数都不会变为零时，就会出现环形引用。
+
+`std::weak_ptr` 提供了一个 `std::shared_ptr` 不能提供的功能：检查所指向的对象是否仍然存在。这可以通过调用 `std::weak_ptr` 的 `lock()` 或 `expired()` 成员函数来实现。如果对象仍然存在，`lock()` 会返回一个新的 `std::shared_ptr` 指向该对象；如果对象已经被销毁，`lock()` 会返回一个空的 `std::shared_ptr`。`expired()` 则简单地返回一个布尔值，指示对象是否仍然存在。
+
+下面是一个使用 `std::weak_ptr` 的例子：
+
+```cpp
+#include <iostream>
+#include <memory>
+
+class MyClass {
+public:
+    MyClass() {
+        std::cout << "MyClass constructed\n";
+    }
+    ~MyClass() {
+        std::cout << "MyClass destroyed\n";
+    }
+};
+
+int main() {
+    std::weak_ptr<MyClass> weakPtr;
+
+    {
+        std::shared_ptr<MyClass> sharedPtr = std::make_shared<MyClass>();
+        weakPtr = sharedPtr;
+
+        // 使用 weakPtr
+        if (auto tempPtr = weakPtr.lock()) {
+            std::cout << "MyClass still exists\n";
+        } else {
+            std::cout << "MyClass has been destroyed\n";
+        }
+    }
+
+    // sharedPtr 已经被销毁，weakPtr 应该指向 nullptr
+    if (auto tempPtr = weakPtr.lock()) {
+        std::cout << "MyClass still exists\n";
+    } else {
+        std::cout << "MyClass has been destroyed\n";
+    }
+
+    return 0;
+}
+```
+
+在这个例子中，`weakPtr` 被赋值为一个 `std::shared_ptr` 指向 `MyClass` 的实例。当 `sharedPtr` 离开作用域并被销毁时，`weakPtr` 仍然指向原始对象，但由于 `std::weak_ptr` 不增加引用计数，所以 `MyClass` 的析构函数会被调用，输出 "MyClass destroyed"。

@@ -127,13 +127,46 @@ GPT的训练范式与BERT类似，都是现在大型无标签数据上进行训�
 
 链接：[https://arxiv.org/pdf/2103.10360.pdf](https://arxiv.org/pdf/2103.10360.pdf)
 
+自动编码模型（例如BERT）、自动回归模型（例如GPT）和编码器-解码器模型（例如T5）。然而，没有一个预训练框架对三个主要类别的所有任务表现最好，包括自然语言理解（NLU）、无条件生成和条件生成。
+
+GLM通过添加2D位置编码和允许任意顺序预测跨度来改进空白填充预训练，从而在NLU任务上比BERT和T5的性能提高。
+
+* 任务1：自动回归空白填充
+  * mask的token方面：（1）一个句子随机抽取连续的几个token，使用一个Span盖住，再把Span随机打乱（为了充分捕捉不同Span之前见的依赖关系，使用随机跨度顺序，类似于排列语言模型）
+  * 被mask的部分：（1）单向注意力（前面预测后面，带箭头）（2）不参与预测没有被mask的部分。（如下图所示）
+  * 没有被mask的部分：双向注意力（前后双向预测，不带箭头）
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img40.jpg)
+
+* 2D位置编码过程
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img41.jpg)
+
+其中(a)为原始序列，被分为A和B两个序列。图(d)中表示了具体的自注意力mask。
+
+* 多任务学习：使用了Document level和Sentence level两个级别进行学习。
+
 
 
 论文：**Glm-130b: An open bilingual pre-trained model**
 
 链接：[https://arxiv.org/pdf/2210.02414.pdf](https://arxiv.org/pdf/2210.02414.pdf)
 
+GLM-130b是对标GPT-3 175B参数规模大小的模型。训练100B左右规模的模型与训练10B规模模型在训练效率、稳定性和收敛性上带来了很多技术和工程上的挑战。
 
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img42.jpg)
+
+上表是描述两个开源大模型工作和GPT-3以及PaLM使用的架构、语种、数据类型、稳定性策略、量化、推理要求等对比。
+
+可以看到，经过量化到INT4类型后，仅需要4张3090（4$\times$24）或者8张1080Ti（8$\times$12）就可以进行130B模型的推理。
+
+![](/Users/caixiongjiang/Library/Application Support/typora-user-images/image-20240125142645093.png)
+
+大体量LLM的训练，相对于10B规模的训练不同，需要大量的工程优化技术，且参数比较难以训练。控制训练过程中的梯度非常重要，这成为了模型是否训练成功的关键。
+
+* INT4量化：研究团队根据不同架构模型的权重精度分布来表现量化对性能的影响，可以看到GLM的权重精度分布使得其直接进行量化后few shot性能几乎没有影响。
+
+<img src="https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img43.jpg" style="zoom:50%;" />
 
 #### Qwen
 
@@ -168,6 +201,20 @@ GPT的训练范式与BERT类似，都是现在大型无标签数据上进行训�
 论文：**DeepSeek LLM Scaling Open-Source Language Models with Longtermism**
 
 链接：[https://arxiv.org/pdf/2401.02954.pdf](https://arxiv.org/pdf/2401.02954.pdf)
+
+> 数据
+
+为了全面增强数据集的丰富性和多样性，将数据收集的手段的方法分为了三个阶段：数据删除、过滤和重新混合。
+
+> 架构
+
+DeepSeek LLM的微观设计在很大程度上遵循了LLaMA的设计，采用具有RMSNorm功能的Pre-Norm结构，并使用SwiGLU作为前馈网络的激活函数，中间层尺寸为38d模型。它还纳入了旋转嵌入用于位置编码。为了优化推理成本，67B模型使用GroupedQuery Attention，而不是传统的多头注意力。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img44.jpg)
+
+DeepSeek一共有两个版本的模型，分别是7B和67B。DeepSeek在模型训练上没有使用传统的余弦退火学习策略。而采用了多步学习率下调策略，可以看到下图是他们训练结果的区别。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img45.jpg)
 
 
 
@@ -229,5 +276,135 @@ NLU (Natural Language Understanding) 和 NLG (Natural Language Generation) 是�
 * **Selective methods**: 这种方法主要是通过自由选择网络的一些层进行微调，例如调整偏置（bias）等，以及一些稀疏更新的方法，然而不受限制的非结构化稀疏性在当代硬件上很难得到很好的加速。
 * **Reparametrization-based methods**: 该类别方法使用了低秩矩阵分解的原理，最大限度地减少可训练的参数。
 
+#### 检索增强生成
 
+论文：**Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks**
+
+链接：[https://proceedings.neurips.cc/paper/2020/file/6b493230205f780e1bc26945df7481e5-Paper.pdf](https://proceedings.neurips.cc/paper/2020/file/6b493230205f780e1bc26945df7481e5-Paper.pdf)
+
+该论文针对序列到序列（seq2seq）模型的”幻觉”问题，提出了一种检索增强生成的问题。
+
+大模型通常在知识密集型任务上低于特定任务架构的性能。该文提出的RAG只要由参数存储器（参数可调整模型）和非参数存储器相结合，如下图所示。其中编码器和检索器组成了非参数存储器，而生成器（后面演变成LLM）充当参数存储器。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/img39.jpg)
+
+RAG有两种训练范式：
+
+* RAG-Sequence Model：使用序列级别的检索来增强生成模型。生成模型负责生成目标序列，检索模型负责从候选文档集中选择相关的文档或片段，组合模块将生成模型和检索模型的输出结合起来，以生成最终的结果。
+* RAG-Token Model：将检索模型的输出直接融入到生成模型中，而不是作为上下文输入。具体而言，RAG-Token Model将检索模型的输出表示为一个可学习的标记嵌入向量，并将其与输入序列的标记嵌入向量进行拼接或加权求和。
+
+为了深入理解这种区别，我们将`BART`模型分别作为分词器和生成器，使用代码来解释这种区别。
+
+* RAG-Sequence Model：
+
+```python
+from transformers import RagTokenizer, RagSequenceForGeneration, RagRetriever
+
+# 定义检索器（Retriever）
+retriever = RagRetriever.from_pretrained('facebook/dpr-ctx_encoder-single-nq-base')
+
+# 定义生成器（Generator）
+generator = RagSequenceForGeneration.from_pretrained('facebook/bart-large')
+
+# 定义分词器（Tokenizer）
+tokenizer = RagTokenizer.from_pretrained('facebook/bart-large')
+
+# 输入查询
+query = "What is the capital of France?"
+
+# 输入候选文档
+documents = [
+    "France is a country located in Western Europe. Its capital is Paris.",
+    "Paris is the capital and most populous city of France.",
+    "The capital city of France is Paris."
+]
+
+# 对查询和候选文档进行编码
+inputs = tokenizer.prepare_seq2seq_batch(
+    queries=query,
+    documents=documents,
+    return_tensors='pt'
+)
+
+# 检索相关文档
+retrieved_docs = retriever(inputs['input_ids'], attention_mask=inputs['attention_mask'])
+
+# 将检索到的文档作为上下文输入，生成结果
+generated = generator.generate(
+    input_ids=inputs['input_ids'],
+    attention_mask=inputs['attention_mask'],
+    context_input_ids=retrieved_docs['context_input_ids'],
+    context_attention_mask=retrieved_docs['context_attention_mask'],
+    max_length=50,
+    num_return_sequences=1,
+    num_beams=4,
+    no_repeat_ngram_size=2
+)
+
+# 解码生成的结果
+result = tokenizer.batch_decode(generated, skip_special_tokens=True)
+
+print(result)
+```
+
+* RAG-Token Model：
+
+```python
+from transformers import RagTokenizer, RagTokenForGeneration, RagRetriever
+
+# 定义检索器（Retriever）
+retriever = RagRetriever.from_pretrained('facebook/dpr-ctx_encoder-single-nq-base')
+
+# 定义生成器（Generator）
+generator = RagTokenForGeneration.from_pretrained('facebook/bart-large')
+
+# 定义分词器（Tokenizer）
+tokenizer = RagTokenizer.from_pretrained('facebook/bart-large')
+
+# 输入查询
+query = "What is the capital of France?"
+
+# 输入候选文档
+documents = [
+    "France is a country located in Western Europe. Its capital is Paris.",
+    "Paris is the capital and most populous city of France.",
+    "The capital city of France is Paris."
+]
+
+# 对查询和候选文档进行编码
+inputs = tokenizer.prepare_seq2seq_batch(
+    queries=query,
+    documents=documents,
+    return_tensors='pt'
+)
+
+# 检索相关文档
+retrieved_docs = retriever(inputs['input_ids'], attention_mask=inputs['attention_mask'])
+
+# 将检索到的文档表示为嵌入向量
+context_embeddings = retrieved_docs['retrieved_doc_embeds']
+
+# 将检索结果与输入序列的标记嵌入向量进行拼接
+input_ids = inputs['input_ids']
+attention_mask = inputs['attention_mask']
+expanded_input_ids = torch.cat([input_ids, context_embeddings], dim=-1)
+expanded_attention_mask = torch.cat([attention_mask, torch.ones_like(context_embeddings)], dim=-1)
+
+# 生成结果
+generated = generator.generate(
+    input_ids=expanded_input_ids,
+    attention_mask=expanded_attention_mask,
+    max_length=50,
+    num_return_sequences=1,
+    num_beams=4,
+    no_repeat_ngram_size=2
+)
+
+# 解码生成的结果
+result = tokenizer.batch_decode(generated, skip_special_tokens=True)
+
+print(result)
+```
+
+#### RLHF训练
 
