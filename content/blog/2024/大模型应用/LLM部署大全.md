@@ -20,9 +20,9 @@ comment : true
 
 ### 模型下载
 
-首先启动大模型，首先需要下载一个模型，模型的下载首选地址为HF官网模型库：https://huggingface.co/models
+首先启动大模型，首先需要下载一个模型，模型的下载首选地址为HF官网模型库：[https://huggingface.co/models](https://huggingface.co/models)
 
-假设你的网络不能进入上述网址，可以进入魔搭社区下载，大部分模型都会同步到这里：https://www.modelscope.cn/models
+假设你的网络不能进入上述网址，可以进入魔搭社区下载，大部分模型都会同步到这里：[https://www.modelscope.cn/models](https://www.modelscope.cn/models)
 
 我们这里使用Qwen1.5系列的模型做示例，具体的模型型号为[Qwen1.5-4B-Chat](https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat/summary)。
 
@@ -30,7 +30,7 @@ comment : true
 
 #### 原生Transformers库启动
 
-使用最原始的Transformer框架启动，需要写一小部分代码，官方已经为你写好了Demo，地址在https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat/summary。
+使用最原始的Transformer框架启动，需要写一小部分代码，官方已经为你写好了Demo，地址在[https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat/summary](https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat/summary)。
 
 为了通用性，我对代码做了略微的修改：
 ```python
@@ -152,7 +152,7 @@ class Qwen1_5():
 
 #### llama.cpp启动
 
-`llama.cpp`是一个C++库，用于简化LLM推理的设置。该库是一个纯C/C++实现，不依赖任何外部库，并且针对x86架构提供了AVX、AVX2和AVX512加速支持。此外，它还提供了2、3、4、5、6以及8位量化功能，以加快推理速度并减少内存占用。对于大于总VRAM容量的大规模模型，该库还支持CPU+GPU混合推理模式进行部分加速。本质上，llama.cpp的用途在于运行GGUF（由GPT生成的统一格式）模型。llama.cpp的官方仓库地址如下：https://github.com/ggerganov/llama.cpp。我们将演示如何使用llama.cpp运行Qwen。
+`llama.cpp`是一个C++库，用于简化LLM推理的设置。该库是一个纯C/C++实现，不依赖任何外部库，并且针对x86架构提供了AVX、AVX2和AVX512加速支持。此外，它还提供了2、3、4、5、6以及8位量化功能，以加快推理速度并减少内存占用。对于大于总VRAM容量的大规模模型，该库还支持CPU+GPU混合推理模式进行部分加速。本质上，llama.cpp的用途在于运行GGUF（由GPT生成的统一格式）模型。llama.cpp的官方仓库地址如下：[https://github.com/ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp)。我们将演示如何使用llama.cpp运行Qwen。
 
 > 安装llama.cpp
 
@@ -164,7 +164,7 @@ make
 ```
 > 下载GGUF文件并启动
 
-找到`Qwen1.5-4B-Chat`官方的GGUF文件：https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat-GGUF/summary，下载到本地。
+找到`Qwen1.5-4B-Chat`官方的GGUF文件：[https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat-GGUF/summary](https://www.modelscope.cn/models/qwen/Qwen1.5-4B-Chat-GGUF/summary)，下载到本地。
 ```bash
 ./main -m Qwen1.5-7B-Chat-GGUF -n 512 --color -i -cml -f prompts/chat-with-qwen.txt
 ```
@@ -179,8 +179,8 @@ make
 
 > 下载Ollama
 
-Ollama的官方仓库：https://github.com/ollama/ollama
-Ollama官网：https://ollama.com/
+Ollama的官方仓库：[https://github.com/ollama/ollama](https://github.com/ollama/ollama)
+Ollama官网：[https://ollama.com](https://ollama.com)
 
 Ollama的运行非常简单，对于Windows和MacOS，其专门制作了APP来运行。
 
@@ -201,7 +201,7 @@ ollama run qwen:4b
 ollama serve
 ```
 这样会在本地启动一个地址来访问，一般为http://localhost:11434
-具体详细使用：https://github.com/ollama/ollama/blob/main/docs/api.md
+具体详细使用：[https://github.com/ollama/ollama/blob/main/docs/api.md](https://github.com/ollama/ollama/blob/main/docs/api.md)
 
 这里写一下网上别人使用的记录：
 ```bash
@@ -211,7 +211,7 @@ curl http://localhost:11434/api/generate -d '{
     "stream": false
 }'
 ```
-其他详细的参数解释：https://ducafecat.medium.com/%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2-llama3-%E5%A4%A7%E6%A8%A1%E5%9E%8B-%E6%94%AF%E6%8C%81-api-%E8%AE%BF%E9%97%AE-9012e17d9400
+其他详细的参数解释：[https://ducafecat.medium.com/%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2-llama3-%E5%A4%A7%E6%A8%A1%E5%9E%8B-%E6%94%AF%E6%8C%81-api-%E8%AE%BF%E9%97%AE-9012e17d9400](https://ducafecat.medium.com/%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2-llama3-%E5%A4%A7%E6%A8%A1%E5%9E%8B-%E6%94%AF%E6%8C%81-api-%E8%AE%BF%E9%97%AE-9012e17d9400)
 
 返回json数据:
 ```json
@@ -236,7 +236,7 @@ curl http://localhost:11434/api/generate -d '{
 
 vLLM优化了内存的分配和搬运，它易于使用，且具有最先进的服务吞吐量、高效的注意力键值内存管理（通过PagedAttention实现）、连续批处理输入请求、优化的CUDA内核等功能。要了解更多关于vLLM的信息。
 
-文档：https://vllm.readthedocs.io/
+文档：[https://vllm.readthedocs.io](https://vllm.readthedocs.io)
 
 > vLLM环境依赖
 
@@ -398,7 +398,7 @@ python3 -m vllm.entrypoints.openai.api_server \
 --lora-dtype="auto" \
 --trust-remote-code
 ```
-这里`dtype`参数设置为了`half`，是因为Tesla T4 GPU不支持Bfloat16的数据格式。更多的参数设置同样可以看模型启动的参数设置，与代码中的参数设置是相同的：https://docs.vllm.ai/en/latest/models/engine_args.html
+这里`dtype`参数设置为了`half`，是因为Tesla T4 GPU不支持Bfloat16的数据格式。更多的参数设置同样可以看模型启动的参数设置，与代码中的参数设置是相同的：[https://docs.vllm.ai/en/latest/models/engine_args.html](https://docs.vllm.ai/en/latest/models/engine_args.html)
 
 > 服务调用结果示例
 
@@ -555,7 +555,7 @@ pip install "skypilot-nightly[aws,gcp]"
 ```bash
 sky check
 ```
-你也参考官方文档：https://skypilot.readthedocs.io/en/latest/getting-started/installation.html
+你也参考官方文档：[https://skypilot.readthedocs.io/en/latest/getting-started/installation.html](https://skypilot.readthedocs.io/en/latest/getting-started/installation.html)
 
 > 运行Qwen1.5-72B-Chat
 
@@ -602,8 +602,8 @@ curl -L http://$IP:8000/v1/chat/completions \
 `LangChain`相对使用更为广泛，代码更新频率相对较慢，功能范围更广泛。
 `llama_index`使用并没有那么广泛，代码更新频率很快，支持的东西更细致，集成度更高，其本身也兼容了`LangChain`的部分功能，文档更加细致。
 
-LangChain官方文档：https://python.langchain.com/docs/get_started/introduction
-llama_index官方文档：https://docs.llamaindex.ai/en/stable
+LangChain官方文档：[https://python.langchain.com/docs/get_started/introduction](https://python.langchain.com/docs/get_started/introduction)
+llama_index官方文档：[https://docs.llamaindex.ai/en/stable](https://docs.llamaindex.ai/en/stable)
 
 #### LangChain, llama_index本地启动模型
 
@@ -649,7 +649,6 @@ llm = ChatOpenAI(
     openai_api_base="http://20.20.136.251:10005/v1",
     model_name="qwen1.5-4b-chat",
     temperature=0,
-    streaming=True 
 )
 
 # 使用这种接口输出的格式与上述函数是相同的
