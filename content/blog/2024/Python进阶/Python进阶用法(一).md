@@ -138,5 +138,125 @@ print(f"s2.name：{s2.name}, s2.name.len：{Student.name_len(s2.name)}")
 
 静态方法在外部必须使用类本身来访问，在类内则可以通过`self`来访问。
 
+### 推导式
 
+推导式是一种高效创建列表、字典、集合或者其他可迭代的对象的方式，极大了压缩了代码的长度。
 
+#### 列表
+先看一个列表复制的例子：
+```python
+nums = [0, 1, 2, 3, 4, 5]
+
+my_list = []
+for i in nums:
+    my_list.append(nums[i])
+print(my_list)
+```
+上述为普通的写法，如果使用推导式，它的代码将简化为：
+```python
+my_list = [i for i in nums]
+print(my_list)
+```
+再来看一个略微复杂的例子：
+```python
+nums = [0, 1, 2, 3, 4, 5]
+
+my_list = []
+for i in nums:
+    my_list.append(i**2)
+print(my_list)
+```
+它的推导式写法可变为：
+```python
+my_list = [i**2 for i in nums]
+print(my_list)
+```
+
+在循环中加入条件判断
+```python
+# 1
+nums = [0, 1, 2, 3, 4, 5]
+
+my_list = []
+for i in nums:
+    if i % 2 == 0:
+        my_list.append(i**2)
+print(my_list)
+
+# 2
+nums = [0, 1, 2, 3, 4, 5]
+
+my_list = [] 
+for i in nums:
+    if i % 2 == 0:
+        my_list.append(i**2)
+print(my_list)
+```
+**注意只有if和有if-else的写法是不一样的**
+```python
+# 1
+nums = [0, 1, 2, 3, 4, 5]
+my_list = [i**2 for i in nums if i%2 == 0]
+print(my_list)
+
+# 2
+nums = [0, 1, 2, 3, 4, 5]
+my_list = [i**2 if i%2 == 0 else i**3 for i in nums]
+print(my_list)
+```
+
+再加大一点难度，加入双层for循环：
+```python
+letters = ["a", "b", "c"]
+nums = [1, 2, 3]
+
+my_list = []
+for i in letters:
+    for j in nums:
+        my_list.append((i, j))
+print(my_list)
+```
+推导式的写法为：
+```python
+letters = ["a", "b", "c"]
+nums = [1, 2, 3]
+
+my_list = [(i, j) for i in letters for j in nums]
+print(my_list)
+```
+#### 字典
+
+将列表中的元素一一配对：
+```python
+letters = ["a", "b", "c"]
+nums = [1, 2, 3]
+
+my_dict = {}
+for i, j in zip(letters, nums):
+    my_dict[i] = j
+print(my_dict)
+```
+推导式写法为：
+```python
+# 注意切换为字典后写法的变化
+my_dict = {i: j for i, j in zip(letters, nums)}
+```
+#### 集合
+集合的特点是**无序，不重复**。
+举一个例子，使用频率没有前两个那么高：
+```python
+l = [1,2,3,4,5,6,7,8,8]
+my_set = set()
+for i in l:
+    my_set.add(i)
+print(my_set)
+```
+
+```python
+l = [1,2,3,4,5,6,7,8,8]
+my_set = set()
+my_set = {i for i in l}
+print(my_set)
+```
+#### 总结
+Python推导式非常适用于从零创建有序的一些迭代对象。但是推导式使用循环最多两层，再多不建议使用，因为比较容易造成代码可读性较差的问题，以及在代码调试上的一些难题。
