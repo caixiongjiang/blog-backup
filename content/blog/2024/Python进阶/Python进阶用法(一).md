@@ -260,3 +260,106 @@ print(my_set)
 ```
 #### 总结
 Python推导式非常适用于从零创建有序的一些迭代对象。但是推导式使用循环最多两层，再多不建议使用，因为比较容易造成代码可读性较差的问题，以及在代码调试上的一些难题。
+
+
+### 生成器
+
+生成器是一个在处理大量数据时较为有效的工具。它与列表是一种类似的工具，但两者的性能却完全不同。它们的主要区别：
+
+Python中的生成器（Generator）和列表（List）是两种不同的数据结构，它们在内存使用、性能和使用场景上有显著的区别。以下是生成器和列表的主要区别：
+
+1. **内存使用**：
+   - **列表**：列表在内存中存储所有的元素。如果列表很大，会占用大量的内存。
+   - **生成器**：生成器是惰性计算的，它只在需要时生成下一个元素。这意味着生成器在内存中只存储生成下一个元素所需的状态，因此占用的内存非常少。
+
+2. **性能**：
+   - **列表**：列表在创建时会立即计算并存储所有元素，因此访问列表中的元素非常快。
+   - **生成器**：生成器在每次迭代时才计算下一个元素，因此生成器的创建和迭代速度可能比列表慢。
+
+3. **迭代行为**：
+   - **列表**：列表可以多次迭代，因为所有元素都存储在内存中。
+   - **生成器**：生成器只能迭代一次，因为元素是按需生成的，一旦生成并使用，生成器就无法再次生成相同的元素。
+
+4. **语法**：
+   - **列表**：列表使用方括号 `[]` 来定义，例如 `[1, 2, 3, 4]`。
+   - **生成器**：生成器使用圆括号 `()` 来定义生成器表达式，或者使用 `yield` 关键字来定义生成器函数。例如：
+     ```python
+     # 生成器表达式
+     gen = (x for x in range(10))
+     
+     # 生成器函数
+     def gen_func():
+         for i in range(10):
+             yield i
+     ```
+
+5. **使用场景**：
+   - **列表**：适用于需要多次访问、修改或查找元素的场景。
+   - **生成器**：适用于需要处理大量数据或无限序列，且不需要多次访问所有元素的场景。
+
+**生成器适用于超大数据场景的读取上，还有大语言模型的流式输出也使用到了生成器的思想。**
+
+
+来看一个例子来学习生成器：
+```python
+def square_numbers(nums):
+    result=[]
+    for i in nums:
+        result.append(i * i)
+    return result
+
+
+def gen_numbers(nums):
+    for i in nums:
+        yield i * i
+
+my_nums = square_numbers([1, 2, 3, 4, 5])
+print(my_nums)
+# [1, 4, 9, 16, 25]
+
+my_gens = gen_numbers([1, 2, 3, 4, 5])
+print("Running next function:")
+print(next(my_gens))
+print("Then running for loop:")
+for gen in my_gens:
+    print(gen)
+print("Then running for loop:")
+for gen in my_gens:
+    print(gen)
+# Running next function:
+# 1
+# Then running for loop:
+# 4
+# 9
+# 16
+# 25
+# Then running for loop:
+```
+
+**可以看到先使用next读取之后，for loop的读取便从4开始了，由此可见生成器生成的内容只允许读取一遍，所以再第二次遍历的时候已经变为了空值。**
+
+再举一个大语言模型的流式输出例子：
+```python
+def stream_output(data, chunk_size=10):
+    """
+    生成器函数，用于逐个生成数据块
+    :param data: 要处理的数据
+    :param chunk_size: 每个数据块的大小
+    """
+    start = 0
+    end = chunk_size
+    while start < len(data):
+        yield data[start:end]
+        # 使用时间停顿来模拟大模型处理过程
+        time.sleep(0.1)
+        start = end
+        end += chunk_size
+
+# 示例数据
+data = "This is a long piece of text that we want to stream out in chunks."
+
+# 使用生成器进行流式输出
+for chunk in stream_output(data):
+    print(chunk)
+```
+
