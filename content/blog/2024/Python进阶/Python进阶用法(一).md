@@ -363,3 +363,41 @@ for chunk in stream_output(data):
     print(chunk)
 ```
 
+### 匿名函数
+
+匿名函数的应用场景：当我们在使用一个简单的，只会使用一次的函数，就可以使用匿名函数。匿名函数的关键字是`lambda`，来看一个使用的例子：
+```python
+def add(a, b):
+    return a + b
+print(add(3, 4))
+
+# 匿名函数写法
+add = lambda a, b: a + b
+print(add(3, 4))
+```
+匿名函数的构造：`函数名` = `lambda` + `入参` + `返回值`，入参如果没有可以省略。让我们来看一个更常见的写法：
+```python
+my_list = [1, 2, 3, 4, 5]
+new_list = list(map(lambda x: x**2, my_list))
+print(new_list)
+```
+首先先解释一下`map`函数的作用，`map`函数接受一个函数和一个可迭代对象作为参数，对可迭代对象每个元素都应用这个函数，最后返回一个新的迭代器。
+
+再看一个好用的例子，将字典中的value作为匿名函数：
+```python
+def user_logging(user):
+    if user.level == 1:
+        user.credits += 2
+    elif user.level == 2:
+        user.credits += 5
+    elif user.level == 3:
+        user.credits += 10
+
+def user_logging_1(user):
+    level_credit_map = {
+        1: lambda x: x + 2,
+        2: lambda x: x + 5,
+        3: lambda x: x + 10
+    }
+    user.credits = level_credit_map[user.level](user.credits)
+```
