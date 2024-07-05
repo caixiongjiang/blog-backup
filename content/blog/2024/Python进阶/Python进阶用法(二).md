@@ -132,3 +132,126 @@ print(set_3)
 # {'tall', 'name', 'email', 'age'}
 ```
 `**`在传入参数重可以解包，在合并字典中也可以解包，同样在使用`*`对字典进行解包时，默认会将所有的key解包出来作为一个值。
+
+### 装饰器
+
+装饰器（Decorator）是Python中一种非常强大且灵活的工具，用于修改或增强函数或方法的行为。装饰器本质上是一个函数，它接受一个函数作为参数，并返回一个新的函数。
+
+举一个简单的例子：
+```python
+def square(x):
+    return x*x
+
+def print_running(f, x):
+    print(f"{f.__name__} is running")
+    return f(x)
+
+result = print_running(square, 2)
+print(result)
+# square is running
+# 4
+```
+它在这里的作用是不改变函数的情况下，增加了函数运行的提示。同样的功能可以使用装饰器来实现，我们在原有的基础上再增加一个测量时间的功能：
+```python
+
+def square(x):
+    return x*x
+
+import time
+
+def decorator(func):
+    def wrapper(*args, **kwargs):
+        print(f"{func.__name__} is running")
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"{func.__name__} execution time: {end_time - start_time}")
+        return result
+    return wrapper
+
+decorator_square = decorator(square)
+decorator_square(10)
+# square is running
+# square execution time: 9.5367431640625e-07
+```
+而python中定义了一个更为简单的方式来使用装饰器吗，就是直接给函数戴一个装饰器的帽子：
+```python 
+import time
+
+def decorator(func):
+    def wrapper(*args, **kwargs):
+        print(f"{func.__name__} is running")
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"{func.__name__} execution time: {end_time - start_time}")
+        return result
+    return wrapper
+
+@decorator
+def square(x):
+    return x*x
+
+square(10)
+```
+上述的写法效果与前面相同。
+但是判断不同函数运行时间是否超过阈值的功能虽然常见，但它往往是变化的，也就是说需要的阈值会不同，这样我们可以再套一层定义一个装饰器生成器，来看下面的例子：
+```python
+import time
+
+def timer_decorator(threshold):
+    def time_calculate(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            if end_time - start_time > threshold:
+                print(f"{func.__name__} took longer than {threshold}")
+            return result
+        return wrapper
+    return time_calculate
+
+
+@timer_decorator(0.3)
+def time_sleep():
+    time.sleep(0.4)
+
+time_sleep()
+print(time_sleep.__name__)
+# time_sleep took longer than 0.3
+# wrapper
+```
+上述代码将装饰器变为了可定义的装饰器，便于使用，但是使用了装饰器后的函数名会发生改变，我们需要使用一种特殊的方法进行继承。
+```python
+import time
+import functools
+
+def timer_decorator(threshold):
+    def time_calculate(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            if end_time - start_time > threshold:
+                print(f"{func.__name__} took longer than {threshold}")
+            return result
+        return wrapper
+    return time_calculate
+
+
+@timer_decorator(0.3)
+def time_sleep():
+    time.sleep(0.4)
+
+time_sleep()
+print(time_sleep.__name__)
+# time_sleep took longer than 0.3
+# time_sleep
+```
+上述代码中使用python中自带的装饰器`@functools.wraps`。
+
+总的来说，装饰器有许多优点：
+* 提升代码复用性，避免冗余。
+* 使用装饰器可以保证一个复杂的函数逻辑清晰，减少代码查看量。
+* 通过装饰器，可以扩展别人的函数，在添加额外的行为时，不会修改原函数的逻辑。
