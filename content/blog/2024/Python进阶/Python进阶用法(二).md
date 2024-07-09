@@ -255,3 +255,40 @@ print(time_sleep.__name__)
 * 提升代码复用性，避免冗余。
 * 使用装饰器可以保证一个复杂的函数逻辑清晰，减少代码查看量。
 * 通过装饰器，可以扩展别人的函数，在添加额外的行为时，不会修改原函数的逻辑。
+
+### 使用dotenv模块存储敏感信息
+
+在项目中，我们通常会用到一些数据库的密码，以及大模型相关的key信息，然而如果我们将这些信息直接写在代码中，很容易造成泄露。
+
+我们可以使用`python-dotenv`模块来解决这个问题。首先下载这个模块：
+```python
+pip install python-dotenv
+```
+
+在项目目录下新建一个`.env`文件，将敏感信息存入其中：
+```scss
+OPENAI_API_KEY = "FAKE_OPENAI_API_KEY"
+DB_PASSWORD = "FAKE_DB_PASSWORD"
+```
+通过代码来读取：
+```python
+from dotenv import load_dotenv
+# 将文件中的环境变量变为进程中的环境变量
+load_dotenv()
+
+import os 
+openai_api_key = os.getenv("OPENAI_API_KEY")
+db_password = os.getenv("DB_PASSWORD")
+```
+
+当然也可以将项目的名称加入.env文件中来进行区分：
+```python
+from dotenv import load_dotenv
+# 读取的时候也需要加入改变后的名字
+load_dotenv("projectA.env")
+```
+
+如果需要上传git仓库，则需要加好`.gitignore`：
+```.gitignore
+*.env
+```
