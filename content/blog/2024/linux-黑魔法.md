@@ -119,7 +119,7 @@ docker build -t caixj/clash-linux:beta .
 # 查看镜像信息
 docker images
 # 启动
-docker run -itd --names clash caixj/clash-linux:beta 
+docker run -itd --name clash caixj/clash-linux:beta 
 # 查看是否启动成功
 docker ps -a
 ```
