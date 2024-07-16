@@ -199,3 +199,189 @@ def add_to(num, target: Optional[List] = None) -> List:
 print(add_to(1))
 print(add_to(2))
 ```
+
+### 从迭代器到生成器
+
+Python中能够使用for循环迭代的对象叫可迭代对象，也叫iterables，包含`__iter__`方法。
+
+我们可以通过`hasattr`来判断一个对象是否包含某个方法。
+```python
+my_lst = [1, 2, 3]
+my_int = 123
+my_str = "123"
+print(hasattr(my_lst, "__iter__"))  # True
+print(hasattr(my_int, "__iter__"))  # False
+print(hasattr(my_str, "__iter__"))  # True
+```
+
+Python中的for循环底层发生的事：
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/python_advance/img1.jpg)
+
+使用while循环来实现上述过程：
+```python
+my_lst = [1, 2, 3]
+
+it = iter(my_lst)
+
+while True:
+    try:
+        print(next(it))
+    except StopIteration:
+        break
+```
+
+假设我们有一个日志文件，存储着结构化的数据，我们需要对其进行处理，通常的做法如下：
+```python
+import tracemalloc
+
+def process_line(obj: str):
+    pass
+
+file_path = "./logs/service.log"
+
+tracemalloc.start()
+with open(file_path, "r") as f:
+    lines = f.readlines()
+
+for line in lines:
+    process_line(line)
+
+current, peak = tracemalloc.get_traced_memory()
+print(f"Current memory usage: {current / 1024**2} MB")
+print(f"Peak memory usage: {peak / 1024**2} MB")
+tracemalloc.stop()
+# Current memory usage: 0.8936986923217773 MB
+# Peak memory usage: 0.9117012023925781 MB
+```
+
+目前日志中的行数为5000行，假设日志文件为100w行，内存会直接达到200MB，而且这是处理函数为空的情况。
+
+有什么更好的方法在处理大文件的读取处理呢？迭代器的方法就很适合。下面的例子通过一个自定义的迭代器来处理日志文件：
+```python
+import tracemalloc
+def process_line(obj: str):
+    pass
+
+filepath = "logs/service.log"
+
+tracemalloc.start()
+class LineIterator:
+    def __init__(self, file_path):
+        self.file = open(file_path, "r")
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        line = self.file.readline()
+        if line:
+            return line
+        else:
+            self.file.close()
+            raise StopIteration
+
+line_iter = LineIterator(file_path=filepath)
+for line in line_iter:
+    process_line(line)
+
+current, peak = tracemalloc.get_traced_memory()
+print(f"Current memory usage: {current / 1024**2} MB")
+print(f"Peak memory usage: {peak / 1024**2} MB")
+tracemalloc.stop()
+# Current memory usage: 0.004233360290527344 MB
+# Peak memory usage: 0.056969642639160156 MB
+```
+
+可以明显看到内存使用很小，且自定义的操作可以在`__next__`方法中实现。在自定义迭代器中，最重要的方法是`__next__`，`__init__`和`__iter__`显得很累赘。
+
+Python中有另一种对象叫生成器，使用yeild关键字实现，它会自动产生`__iter__`和`__next__`方法。
+```python
+def generator(n):
+    for i in range(n):
+        print("before yield")
+        yield i
+        print("after yield")
+
+gen = generator(3)
+
+print(next(gen))
+print("---")
+for i in gen:
+    print(i)
+# before yield
+# 0
+# ---
+# after yield
+# before yield
+# 1
+# after yield
+# before yield
+# 2
+# after yield
+```
+可以看到生成器是从哪里退出就从哪里进入的。
+
+所以我们可以对自定义的迭代器类进行改造：
+```python
+def line_generator(filepath):
+    with open(filepath, "r") as f:
+        for line in f:
+            if line.split("|")[-1].strip() == "Create":
+                yield True
+            else:
+                continue
+
+line_gen = line_generator(filepath=filepath)
+for line in line_gen:
+    process_line(line)
+```
+
+使用上述生成器的写法和自定义迭代器的类写法是相同的，使用的内存都很小。
+**生成器的特点**：
+1.惰性计算，只有在迭代到这个元素时，才会生成它，而不是所有的内容先生成在读取，这样比较节省内存。
+2.生成器可以没有终点。
+
+
+给一道题写一下，提升理解：
+```python
+def multiplication_generator(x):
+    pass
+
+
+gen = multiplication_generator(2)
+print(next(gen)) # 1x2=2
+
+print(next(gen)) # 2x2=4
+
+print(next(gen)) # 3x2=6
+
+print(next(gen)) # 4x2=8
+
+```
+
+
+答案如下：
+```python
+def multiplication_generator(x):
+    index = 0
+    while True:
+        index += 1
+        yield f"{index} * {x} = {index * x}"
+```
+
+也可以用迭代器的写法：
+```python
+class Iterator:
+    def __init__(self, x):
+        self.i = 0
+        self.x = x
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.i += 1
+        return f"{self.i} * {self.x} = {self.i * self.x}"
+```
+
+
