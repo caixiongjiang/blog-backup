@@ -2,7 +2,7 @@
 title: "Xinference：为LLM app赋能"
 date: 2024-07-11T18:18:05+08:00
 lastmod: 2024-07-11T09:19:06+08:00
-draft: true
+draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/LLM/xinference_title.jpg"
 description: "使用一套统一的框架集成LLM、embedding、reranker、图像模型和语音模型。"
 tags:
@@ -220,7 +220,3 @@ curl -X 'POST' \
 ```
 
 有时候界面启动了并不一定启动了，你需要结合`nvidia-smi`显存占用和本地映射文件中的日志来确定，日志一般在logs文件夹下，会根据每次启动单独生成一个文件夹。
-
-#### 启动训练好的微调模型
-
-TODO: 完成训练好的Qwen2-7B-Instruct模型的部署。

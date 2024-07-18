@@ -384,4 +384,179 @@ class Iterator:
         return f"{self.i} * {self.x} = {self.i * self.x}"
 ```
 
+### Match Case
+
+Python 3.10版本引入了`match-case`语句，它可以用来处理条件分支。
+
+看一个交通灯的例子：
+```python
+def if_traffic_light(color: str) -> str:
+    if color == "red":
+        return "Stop"
+    elif color == "yellow":
+        return "Caution"
+    elif color == "green":
+        return "Go"
+    else:
+        return "Invalid color"
+```
+
+将它改写为`match-case`的版本：
+```python
+def match_traffic_light(color: str) -> str:
+    match color:
+        case "red":
+            return "Stop"
+        case "yellow":
+            return "Caution"
+        case "Green":
+            return "Go"
+        case _:
+            return "Invalid color"
+```
+
+虽然这看上去和C语言中的Switch Case很像，但是其支持的内容比c丰富的多。
+
+* match case可以在匹配时进行解包和绑定变量：
+```python
+def if_point(point: tuple):
+    if len(point) == 2:
+        if point[0] == 0 and point[1] == 1:
+            print("Origin!")
+        else:
+            print(f"x={point[0]},y={point[1]}")
+    else:
+        print(f"{point} is not a valid point!")
+```
+
+改成match case版本如下：
+```python
+def match_point(point:tuple):
+    match point:
+        case (0, 0):
+            print("Origin!")
+        case (x, y):
+            print(f"{x=},{y=}")
+        case others:
+            print(f"{others} is not a valid point!")
+```
+
+这里的`case(x, y)`可以看出是进行了解包和变量绑定的，这里不使用`_`是因为其不能使用变量绑定，而`others`可以。
+当然这里也可以灵活使用这个特性：
+```python
+def match_point(point:tuple):
+    match point:
+        case (0, 0):
+            print("Origin!")
+        case (x, 0):
+            print(f"On x-axis, {x=}")
+        case (0, y):
+            print(f"On y-axis, {y=}")
+        case (x,y):
+            print(f"{x=},{y=}")
+        case others:
+            print(f"{others} is not a valid point!")
+```
+
+在匹配序列的时候需要特别注意的是，默认其并不会匹配类型，而是直接解包，匹配内容：
+```python
+my_tp = (0, 0)
+my_lst = [0, 0]
+
+match my_tp:
+    case [0, 0]:
+        print("Matched tuple")
+
+match my_lst:
+    case (0, 0):
+        print("Matched list")
+
+match my_lst:
+    case 0, 0:
+        print("Matched list")
+
+# Matched tuple
+# Matched list
+# Matched list
+```
+
+如果关心类型和值，或者只关心类型，则可使用如下方式：
+```python
+match my_tp:
+    case tuple([0, 0]):
+        print("Matched tuple")
+
+match my_tp:
+    case tuple():
+        print("t is a tuple")
+```
+
+匹配完成之后，我们还可以进行一些其他操作：
+```python
+def match_quadrant(point):
+    match point:
+        case (x, y) if x > 0 and y > 0:
+            print("First quadrant")
+        case (x, y) if x < 0 < y:
+            print("Second quadrant")
+        case (x, y) if x < 0 and y < 0:
+            print("Third quadrant")
+        case (x, y) if y < 0 < x:
+            print("Fourth quadrant")
+        case (x, y):
+            print("On axis")
+```
+
+那么match case能否匹配字典和自定义的类呢？答案是可以。
+
+看一个例子：
+```python
+match dict_p:
+    case {"x": 0, "y": 0}:
+        print("Origin")
+    case {"x": x, "y": y}:
+        print(f"{x=}, {y=}")
+```
+
+如果只想匹配其中的某个关键字：
+```python
+match dict_p:
+    case {"x": 20}:
+        print("Matched!")
+```
+
+同样的自定义类也是一样的：
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(0, 1)
+
+match p:
+    case Point(x=0, y=0):
+        print("Origin")
+    case Point(x=x, y=y):
+        print(f"{x=},{y=}")
+# x=0,y=1
+```
+**需要注意的是，类的定义可以使用位置参数，但是在case关键字使用时，类中必须使用关键字参数，否则会报错。**
+如果需要强行使用：
+```python
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(0, 1)
+
+match p:
+    case Point(0, 0):
+        print("Origin")
+    case Point(x, y):
+        print(f"{x=},{y=}")
+# x=0,y=1
+```
 
