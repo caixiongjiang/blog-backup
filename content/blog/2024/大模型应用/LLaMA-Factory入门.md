@@ -276,3 +276,31 @@ API_PORT=10000 chat examples/inference/llama3_lora_sft.yaml
 ```
 
 *注意：使用容器的话修改了端口号，必须要宿主机的端口映射进入容器中的端口号，这样才能正确访问*
+
+
+#### 运行脚本编写
+
+* 单个运行任务（后台运行），`train.sh`：
+```shell
+#!/bin/bash
+CUDA_VISIBLE_DEVICES=0 nohup llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml > output.log 2>&1 &
+```
+运行`./train.sh`。
+
+* 多个运行任务（后台运行，并行），`train.sh`：
+```shell
+#!/bin/bash
+CUDA_VISIBLE_DEVICES=0 nohup llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml > output.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup llamafactory-cli train examples/train_lora/llama3_lora_sft-1.yaml > output-1.log 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup llamafactory-cli train examples/train_lora/llama3_lora_sft-2.yaml > output-2.log 2>&1 &
+```
+运行`./train.sh`。
+
+* 多个运行任务（后台运行，顺序）
+```shell
+#!/bin/bash
+CUDA_VISIBLE_DEVICES=0 llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml > output.log 2>&1
+CUDA_VISIBLE_DEVICES=0 llamafactory-cli train examples/train_lora/llama3_lora_sft-1.yaml > output-1.log 2>&1
+CUDA_VISIBLE_DEVICES=0 llamafactory-cli train examples/train_lora/llama3_lora_sft-2.yaml > output-2.log 2>&1
+```
+运行`nohup bash train.sh &`。
