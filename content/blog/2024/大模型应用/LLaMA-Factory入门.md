@@ -195,6 +195,44 @@ docker exec -it llamafactory /bin/bash
 }
 ```
 
+你也可以将数据集的字段多写一些!
+> 在指令监督微调时，instruction 列对应的内容会与 input 列对应的内容拼接后作为人类指令，即人类指令为 instruction + "\n" + input。而 output 列对应的内容为模型回答。
+> 
+> 如果指定，system 列对应的内容将被作为系统提示词。
+> 
+> history 列是由多个字符串二元组构成的列表，分别代表历史消息中每轮对话的指令和回答。注意在指令监督微调时，历史消息中的回答内容也会被用于模型学习。
+
+包含所有可选字段的数据集格式如下：
+```json
+[
+  {
+    "instruction": "人类指令（必填）",
+    "input": "人类输入（选填）",
+    "output": "模型回答（必填）",
+    "system": "系统提示词（选填）",
+    "history": [
+      ["第一轮指令（选填）", "第一轮回答（选填）"],
+      ["第二轮指令（选填）", "第二轮回答（选填）"]
+    ]
+  }
+]
+```
+对于上述格式的数据，`dataset_info.json`中的数据集描述应为：
+```json
+"数据集名称": {
+  "file_name": "data.json",
+  "columns": {
+    "prompt": "instruction",
+    "query": "input",
+    "response": "output",
+    "system": "system",
+    "history": "history"
+  }
+}
+```
+
+
+
 然后，你就可以在训练的配置文件中使用这个数据集了！
 
 #### 训练参数详解
@@ -214,8 +252,8 @@ lora_target: all
 
 ### dataset （数据集必须要选dataset_info.json中注册的数据集） 
 dataset: zhidian_data_3000, alpaca_zh_demo
-template: llama3
-cutoff_len: 4096  # 模型最大长度，也就是模型训练完成之后的最大上下文长度，一般是1024的倍数
+template: qwen
+cutoff_len: 4096  # 模型最大长度，也就是模型训练完成之后的最大上下文长度，一般是1024的倍数（instrcution + input + output）
 max_samples: 1000 # 每个数据集的最大样本数，假设你的数据集大小超过了1000，则需要调整
 overwrite_cache: true  
 preprocessing_num_workers: 4 # 数据集读取使用的线程数
