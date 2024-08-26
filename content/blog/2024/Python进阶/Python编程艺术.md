@@ -2,7 +2,7 @@
 title: "Python的编程艺术"
 date: 2024-07-30T18:18:05+08:00
 lastmod: 2024-07-30T09:19:06+08:00
-draft: true
+draft: false
 featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/python_advance/title.jpg"
 description: "学习一些较为常用的编程设计思想"
 tags:
