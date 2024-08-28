@@ -3,7 +3,7 @@ title: "Document-AI: 使用模型工具处理非结构化、复杂的各类文�
 date: 2024-08-06T18:18:05+08:00
 lastmod: 2024-08-06T09:19:06+08:00
 draft: false
-featured_image: ""
+featured_image: "https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/rag_title.jpg"
 description: "在RAG制作知识库的前期，需要通过对非结构化数据的识别，清洗来增强文档质量，提高知识库的质量"
 tags:
 - RAG

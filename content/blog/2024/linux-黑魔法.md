@@ -94,7 +94,6 @@ WORKDIR /clash
 RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
 RUN sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
 
-# 更新并安装 Python 3.9 和其他必需的包
 RUN apt-get update && apt-get install -y \
     wget \
     vim \
@@ -119,7 +118,7 @@ docker build -t caixj/clash-linux:beta .
 # 查看镜像信息
 docker images
 # 启动
-docker run -itd --name clash caixj/clash-linux:beta 
+docker run -td --name clash caixj/clash-linux:beta 
 # 查看是否启动成功
 docker ps -a
 ```
