@@ -61,7 +61,9 @@ prompt_template_zh = """给出由三重反引号分隔的用户查询的答案``
 
 下面将会记录的所有RAG相关的技术都或多或少与上面这个图相关。我们将会介绍所有与RAG相关的步骤中相关的进阶技术，以及RAG效果测试数据集的建立、评估、测试。
 
-## 文档加载
+## 文档处理
+
+
 
 ## 文本分块
 
@@ -168,7 +170,7 @@ latex_splitter = LatexTextSplitter(chunk_size=100, chunk_overlap=0)
 docs = latex_splitter.create_documents([latex_text])
 ```
 
-#### 语义分割
+#### 语义分块
 
 Greg Kamradt首次引入了一种新的接近块状的实验技术。在他的笔记本中，Kamradt正确地指出，一个事实是，即全局块大小可能太微不足道，无法考虑文档中段的含义。如果我们使用这种类型的机制，我们无法知道我们是否在组合彼此有任何关系的片段。
 
@@ -204,12 +206,103 @@ print(docs[0].page_content)
 * **评估每种块大小的性能**：可以使用多个索引或一个带有多个命名空间的单一索引测试不同的块大小的性能。使用代表性数据集为想要测试的块大小创建向量，并将它们保存在一个或多个索引中。然后运行一系列查询以评估质量，并比较各种块大小的性能。这很可能是一个迭代过程，需要测试不同的块大小针对不同的查询，直到能够确定最适合内容和预期查询的块大小。
 
 
-## 向量检索
+## 向量化
 
-## 关键词检索
+在简单的RAG流程中，不管是知识库的建立还是问题的查询，首先都要经过向量化。向量化的模型排行榜可以在[leaderboard](https://huggingface.co/spaces/mteb/leaderboard)中找到，向量化模型的选择需要根据业务类型和文本分块的长度来联合确定，并不是使用排行越高的的模型效果就一定更好。
+
+Langchain中使用向量化，使用Chroma、faiss举例：
+```python
+from langchain_community.vectorstores import Chroma, FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embedding_instance = HuggingFaceEmbeddings(model_name=model_path,
+                                           model_kwargs={"device": device},
+                                           encode_kwargs={"normalize_embeddings": True})
+vector_path = "./vector_store"
+
+Chroma.from_documents(
+    documents=texts,
+    embedding=embedding_instance,
+    persist_directory=vector_path
+)
+
+vs = FAISS.from_documents(
+    documents=texts,
+    embedding=embedding_instance
+)
+vs.save_local(vector_path)
+```
+
+### 搜索索引
+
+#### 向量存储索引
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img9.jpg)
+
+RAG 管道的关键部分是搜索索引，存储我们在上一步获得的矢量化内容。最简单的实现使用平面索引——查询向量和所有块向量之间的暴力距离计算。
+
+一个适合在10000+元素规模上进行高效检索的搜索索引是向量索引(vector index)，如[faiss](https://faiss.ai/)、[nmslib](https://github.com/nmslib/nmslib)或[annoy](https://github.com/spotify/annoy)，使用一些近似最近邻(Approximate Nearest Neighbours, ANN)实现，如聚类、树或HNSW(Hierarchical Navigable Small World)算法。
+
+还有一些托管解决方案，如`openSearch`或`ElasticSearch`，以及向量数据库，它们在后台处理了前面描述的数据摄取管道，如Pinecone、Weaviate或Chroma。
+
+**根据索引选择、数据和搜索需求，用户还可以在存储向量的同时存储元数据(metadata)**，然后使用元数据filter来搜索某些日期或来源内的信息。主要的元数据包括页码，上级标题，自定义文档索引等等，这些都有助于检索，也有助于后续建立测试数据集。
+
+#### 多层索引
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img10.jpg)
+
+如果知识库中的文档很多，那么我们必须更加高效地搜索其中的信息，更快更好地找到相关的文档。**这部分在检索时必须存储引用来源的单一答案**。在处理大型数据库时，高效做到这个点的方法是**创建两个索引——一个由摘要组成，另一个由文档块组成**。如图所示，进行两步搜索，首先通过摘要筛选出相关的满足要求的文档，然后再在这些文档中继续检索。
+
+**具体实现方式**：
+1、对整体文本内容分块，向量化，入库
+2、相关文档进行摘要总结，添加对应关系，向量化，入库
+3、输入问题在摘要库中进行检索，通过对应的摘要-文本映射表找到文本库中相关的部分。
+4、在相关文本库的部分重新进行二次检索，找到相关的内容
+
+上述方法在由多个文件组成的内容知识库中尤其适用，每个文件代表的内容是主题比较明确。这会在对检索到的文本进行过滤也会更加轻松搞笑。假设知识库为一整本书的内容，可能需要人工总结摘要，或者使用LLM来总结摘要，形成结构化信息，提供更加精准的检索。
+
+#### 假设问题和假设向量文档（Hypothetical Questions and HyDE）
+
+另一种方法是**让LLM为每个块生成问题，并将这些问题以向量形式嵌入，在运行时对这些问题向量索引执行查询搜索（在我们的索引中用问题向量替换块向量），然后在检索后路由到原始文本块**，并将它们作为上下文发送给LLM以获取答案。这相比多层索引的方案粒度更细，对于能命中的问题，精度较高，命中不了的问题则完全错误，需要根据场景来谨慎选择。
+
+实现步骤：
+1、为每个相关的向量生成对应的问题，向量化，
+2、在问题库里面进行检索，命中后根据映射表拿到对应上下文，送给大模型回答。（由于这里按照问题进行检索本身在生成问题时已经比较精确，不需要二次检索了）
+
+这种方法通过在查询和假设问题之间的更高语义相似性来提高搜索质量，与我们对实际块所拥有的相比。
+
+还有一种逆向逻辑方法称为**假设向量文档(Hypothetical Document Embeddings, HyDE)——用户可以让LLM为给定的查询生成一个假设性响应，然后使用它的向量以及查询向量来增强搜索质量。**
+
+实现步骤：
+1、使用提示词工程让大模型回答问题，尽量简短，向量化
+2、向量化的回答做为内容进行检索，将检索到的内容拼装到RAG的提示词中回答
 
 
-### BM25检索器
+#### 上下文增强
+
+这里的上下文增强是检索较小的块以提高搜索质量，但增强上下文内容语境以供LLM推理。
+
+上下文增强有两套方案，一是利用在较小检索块附件的句子来扩展上下文，二是递归地将文档分割成包含更小子块的更大父块。
+
+> 句子窗口检索
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img11.jpg)
+
+在这个方案中，**文档中的每个句子都被单独嵌入，这为查询与上下文的余弦距离(cosine distance)搜索提供了极高的准确性。**为了在获取最相关的单个句子后更好地推理所找到的上下文，我们通过在检索到的句子前后各扩展k个句子来扩展上下文窗口，然后将这个扩展的上下文发送给LLM。
+
+> 自动合并检索（父文档检索器）
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img12.jpg)
+
+这里的想法与句子窗口检索器非常相似——搜索更颗粒度更细的信息，然后在将检索到的上下文送给LLM推理前扩展上下文窗口。文档被递归地分割成更大父块中更小的子块。
+
+这种方法需要在文本分块的时候做出记录结构化的父子块信息，通常通过记录metadata来实现。
+
+
+
+### 关键词检索
+
+BM25是一种比较常用的关键词检索组件
 
 BM25 是一种基于概率的排名函数，用于信息检索系统。**BM25原理是根据查询词在文档中的出现频率以及查询词在整个文本集中的出现频率，来计算查询词和文档的相似度**。BM25模型的主要思想是：如果一个词在一份文档（这里的文档一般是指分块之后的document）中出现的频率高，且在其他文档中出现的频率低，那么这个词对于这份文档的重要性就越高，相似度就越高。BM25模型对于长文档和短文档有一个平衡处理，防止因文档长度不同，而导致的词频偏差。
 
@@ -282,18 +375,238 @@ jieba 5 nr
 ```
 除了上述的格式，词频和词性都是可以省略的，当然，标注完整效果会更佳。
 
-### ElasticSearch检索器
+#### ElasticSearch检索器
 
 
-## 混合检索
+### 混合检索
+
+一个简单的想法，就是将传统搜索行业的`关键词检索`（稀疏检索算法）和最新的`语义搜索`，`向量检索`结合起来，生成一个最优的检索结果。但是一般不通过简单的融合来实现，这里关键的技巧是正确地结合具有不同相似度得分的检索结果——这个问题通常通过互惠排名融合(Reciprocal Rank Fusion, RRF)算法解决。最终的实现方式如图所示：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img13.jpg)
+
+在Langchain中，这是在`Ensemble Retriever`类中实现的，它结合了用户定义的一系列检索器，例如基于faiss的向量索引和基于BM25的检索器，并使用RRF进行重新排序。
+
+示例demo:
+```python
+from langchain.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+
+doc_list_1 = [
+    "I like apples",
+    "I like oranges",
+    "Apples and oranges are fruits",
+]
+
+# initialize the bm25 retriever and faiss retriever
+bm25_retriever = BM25Retriever.from_texts(
+    doc_list_1, metadatas=[{"source": 1}] * len(doc_list_1)
+)
+bm25_retriever.k = 2
+
+doc_list_2 = [
+    "You like apples",
+    "You like oranges",
+]
+
+embedding = OpenAIEmbeddings()
+faiss_vectorstore = FAISS.from_texts(
+    doc_list_2, embedding, metadatas=[{"source": 2}] * len(doc_list_2)
+)
+faiss_retriever = faiss_vectorstore.as_retriever(search_kwargs={"k": 2})
+
+# initialize the ensemble retriever
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5]
+)
+```
+
+但在实际的检索过程中，这种合并的过程并不总是理想。举一个自己在做RAG的一个例子，下图是自己做的产品库的信息检索方案：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img14.jpg)
+
+因为并不能简单通过权重来评判不同的检索器的好坏。我个人的做法是通过reranker Model（下面会讲到）先对不同的检索结果进行排序，然后进行合并去重，最后取`top_n`的检索结果。**将reranker模型前置的好处是，在各自的检索器检索到的内容，其相似度得分并不一定准确，可以减少多检索器在RRF排序过程的关键检索信息损失。**
+
+合并和去重检索结果的位置排布变得很重要，一般会有两种排布方式：
+
+* 按照各自的排序结果交替排序并进行去重：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img15.jpg)
+
+这种方式将不同检索器得到的结果交替进行排序，每次将结果压入是需要先判断是否存在。
+
+* 按照各自的排序结果头尾排序并进行去重：
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img16.jpg)
+
+这种方式是将不同的结果分别放在头和尾，需要注意的是尾部的顺序需要倒过来。这种做法是根据大模型对较长的文本中头和尾的信息更加敏感的特点，所以这种方法一般针对检索结果较多以及最终的文本较长的情况。
+
+## 重排序和过滤
+
+重排序是指通过一个`reranker`模型对最终检索到的结果重新进行排序，过滤则是通过一些明显的业务属性来过滤明显错误的结果，或者通过`metadata`中的一些信息进行排序，过滤，增加，删减等一系列操作，这个主要看业务的属性来决定。
+
+## 查询转换
+
+查询转换是一系列技术的总称，使用**LLM作为推理引擎**来修改用户输入，以提高检索质量。有几种不同的方法可以做到这一点。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img17.jpg)
+
+查询转换有几种方式：
+
+* 一种是通过根据提问的问题转化为更加通用的主题的方式来降低检索的难度。例如，我在问办理某个产品的需要多少钱？通常的做法是让LLM将其转化为带关键词的更加高效的检索。
+
+```python
+# 这里的资费通常知识库常用的关键词
+办理<某产品>的需要多少钱？ --> <某产品>的资费
+```
+
+* 另一种查询转换则是将复杂的查询分解为子查询。例如，如果用户问：“在Github上，Langchain和LlamaIndex哪个更优秀？”，而我们不太可能在语料库中的某些文本中找到直接的比较，所以将这个问题分解为两个子查询是有意义的，假设更简单、更具体的信息检索：“Langchain在Github上有多少星星？”“Llamaindex在Github上有多少星星？”它们将并行执行，然后将检索到的上下文合并到一个提示中，供LLM合成对初始查询的最终答案。这两个库都实现了这个功能——在Langchain中作为多查询检索器(Multi Query Retriever)，在Llamaindex中作为子问题查询引擎(Sub Question Query Engine)。
+
+Langchain demo:
+```python
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain_openai import ChatOpenAI
+
+question = "What are the approaches to Task Decomposition?"
+llm = ChatOpenAI(temperature=0)
+retriever_from_llm = MultiQueryRetriever.from_llm(
+    retriever=vectordb.as_retriever(), llm=llm
+)
+```
+
+* 回退提示(Step-back prompting)使用LLM生成一个更普适的查询，检索它我们获得一个更普适或更高层次的上下文语境，有助于支撑初始查询的答案。初始查询的检索同时被执行，两个上下文都被提交到LLM以便在最后一步生成答案。
+
+## 参考引用
+
+如果用户使用多个检索来源生成答案，无论是因为初始查询的复杂性（用户不得不执行多个子查询，然后将检索到的上下文合并为一个答案），还是因为在不同文档中找到了某个查询的相关上下文，那么就会出现一个问题，即Generator是否能准确地显示所使用的引用来源。
+
+有几种方法可以做到这一点：
+
+1、将这个**显示引用源的任务插入到prompt中**，要求LLM说明所使用的引用源编号。
+
+例子： 
+```python
+prompt = """
+...
+[
+    retrieve_results_1, source: A
+    retrieve_results_2, source: B
+]
+...
+请你说明你的回答使用了哪些检索结果，标注出相应的引用源。
+"""
+```
+
+2、将生成的答案部分与索引中的原始文本块匹配——LlamaIndex为这种情况提供了一种高效的模糊匹配解决方案(fuzzy matching based solution)(模糊匹配(fuzzy matching)是一种非常强大的字符串匹配技术)。
+
+**这种方法是通过算法来解决文本块使用的问题。**
+
+上述两种方法各有优劣，需要根据实际情况进行灵活选择。
 
 
-## 分级检索
+## 聊天引擎（多轮对话）
 
-## 结果排序
+单体的RAG流程仅仅是针对单次问答的情况，并不会考虑上下文。如果要构建多次问答的RAG系统，则需要支持历史对话，但是多轮历史对话往往会很长，而大模型支持的token数比较有限。
+
+要构建一个能够对单个查询多次执行操作的高效RAG系统，下一个重要步骤是实现聊天逻辑，这与经典聊天机器人在LLM时代之前处理对话上下文的方式类似。采用这种方式是为了**支持后续问题、指代解析或与之前对话上下文相关的任何用户指令**。解决这一问题的方法是通过**查询压缩(query compression)技术**，同时考虑聊天上下文和用户查询。
+
+在上下文压缩方面，有几种方法可供选择：
+
+* 一种比较流行且相对简单的方法是使用`ContextChatEngine`，它**首先检索与用户查询相关的上下文，然后将其连同聊天历史记录从内存缓冲区取出发送给LLM**，以便LLM在生成下一个答案时能够了解之前的上下文。
+* 另一种相对复杂的情况是`CondensePlusContextMode`，在这种模式下，**每次交互中的聊天记录和最后一条消息被压缩成一个新的查询，然后这个查询被发送到索引里**，并把检索到的上下文连同原始用户消息一起传递给LLM以生成答案。这种技术需要LLM将最近几条的聊天记录和最新的一条消息进行压缩，保证整体的语义与用户的真实意图相同。
+
+在实际的生产环境中，`ContextChatEngine`往往是不work的，因为你无法保证用户在输入问题时使用书面化的问法，**大部分口语化的问答方式，关键信息会保留在上一次问题中，而在本次提问中仅仅进行追问。在本次的查询中缺少关键信息，检索效果往往不佳。**
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img18.jpg)
+
+聊天引擎是RAG系统中的一个关键组件，它不仅处理用户的直接查询，还能够理解和响应与之前对话上下文相关的内容。通过这种方式，RAG系统能够提供更连贯、更自然的对话体验。
+
+## 查询路由
+
+查询路由是指针对用户的查询，由LLM来决定下一步操作的决策步骤。通常的选择包括总结信息、对某些数据索引进行搜索，或尝试多种不同的路径并将它们的输出合成为唯一的答案。实现方式便是`Agent智能体`。
+
+**查询路由器(Query Routers)**还用于选择索引，或者更通俗地说是选择执行用户查询命令的数据源。无论是拥有多个数据源（比如经典的向量存储、图形数据库或关系数据库），还是拥有多层索引结构（比如处理在多文档存储的时候，一个典型的索引创建方案很可能是一个由摘要组成的索引和另一个由文档块向量组成的索引），都需要进行查询路径选择。
+
+其中所有的查询选择，结果判断，都需要大模型自己判断，而不是人工定制好一个路径。
+
+### 多文档智能体方案
+
+
+> Agents的概念：一个能够进行推理、提供一系列工具和一个完成特定任务的LLM
+
+智能体提供的工具可能包括如各种语言代码功能，各种外部API，甚至各种其他智能体——这种LLM链式的想法是LangChain名字的由来。目前市面上的大模型都适配了工具调用能力，也就是将语言文本转化为使用API调用外部工具或数据库查询的能力。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img19.jpg)
+
+上述图片中的`多文档智能体`的方案，将多个文档检索的方式都制作为智能体，每个智能体都能自行判断需要进行哪些子查询，自行决定查询完了之后需要使用哪个查询出来的结果。顶层的智能体则单纯使用路由的能力，来选择使用哪些查询智能体。
+
+这种复杂方案的缺点基本可以从上图中推测出来——由于涉及智能体内部的多次LLM迭代，所以执行效率比较低下。**需要注意的是，LLM调用总是RAG管道中最费时的操作**。因此，对于大型多文档存储，建议考虑对这个方案进行一些简化，以便提高其可扩展性。最简单的方法就是将所有的文档智能体使用一套通用的固定查询路径。
+
+## 响应合成器
+
+这是每个RAG管道的最后一步——基于用户精心检索到的所有上下文和初始用户查询生成答案。最简单的方法是将所有检索到的上下文（高于某个相关性阈值）与查询一起连续地提交给LLM。但总有其他更复杂的方案，比如多次执行LLM调用来细化检索到的上下文，以生成更完美的答案。
+
+响应合成的主要方法包括：
+
+1、通过将检索到的上下文逐块提交给LLM来迭代优化答案。
+2、摘要检索到的上下文以匹配prompt。
+3、基于不同上下文块生成多个答案，然后将它们融合或摘要。
+
+## RAG相关的微调
+
+* embedding模型微调：[LLamaIndex](https://docs.llamaindex.ai/en/stable/examples/finetuning/embeddings/finetune_embedding/)提供了embedding模型微调的方式，根据国外博主的实测，bge-large-en-v1.5的embedding模型微调能够对RAG系统带来2%的性能提升。
+* reranker模型微调：另一个好的旧选择是，如果您不完全信任基础编码器，则有一个交叉编码器来重新排名检索到的结果。它的工作方式如下——您将查询和每个检索到的前k个文本块传递给交叉编码器，由SEP令牌隔开，并微调为相关块输出1，不相关块输出0。这种调整过程的一个很好的例子可以在[这里](https://docs.llamaindex.ai/en/latest/examples/finetuning/cross_encoder_finetuning/cross_encoder_finetuning.html#)找到，结果显示，通过交叉编码器微调，配对得分提高了4%。
 
 ## 指标评估
 
+### 基于人工的数据集评测
+
+基于人工的RAG评测需要人工构建问题和对应目标文本的数据集。这是一个示例的数据集格式：
+```json
+{
+    # relevant_docs_source是在整个知识库中的document-ID（存储在metadata信息中）
+    "query_id": 1,
+    "query_text": "<某产品>的优势是什么？",
+    "relevant_docs_source": [40]
+}
+```
+关于不同的类别，可以在其上层继续构建分类，用于不同的类别。
+关于定量指标，通常选择一些常用的：`recall`, `precison`, `f1_score`, `hit_rate`。
+
+* 召回率（Recall）：召回率是指系统正确检索到的相关文档数与所有相关文档数的比例。
+
+
+$$Recall = \frac{检索到的相关文档数}{所有相关文档数}$$
+
+
+* 精确率（Precision）：精确率是指系统检索到的相关文档数与检索到的所有文档数的比例。
+
+$$Precision = \frac{检索到的相关文档数}{检索到的所有文档数}$$
+
+* F1分数（F1 Score）：F1分数是精确率和召回率的调和平均值，用于综合衡量系统的性能。
+
+$$ F1\-Score = 2 \times \frac{Precision * Recall}{Precision + Recall}$$
+
+* 命中率（Hit Rate）：命中率是指系统在检索到的文档中至少有一个相关文档的比例。
+
+$$Hit Rate = \frac{至少有一个相关文档的查询数}{总查询数}$$
+
+
+**上述所有指标都需要结合最终检索的格式`top_n`结合起来看，在上面几个指标中，最重要的是`召回率`和`命中率`。这是因为你即便召回了部分噪声，大模型本身具有判断的能力，但如果没有正确的没有召回，大模型则没有信息来源，是不可能回答正确的。**
+
+### 基于大模型的数据集评测
+
+《Evaluating RAG Applications with RAGAs》文章介绍了一个用于评估RAG应用的框架，称为RAGAs，这篇文章详细介绍了RAGAS框架，它的核心目标是提供一套综合性的评估指标和方法，以量化地评估**RAG管道(RAG Pipeline)**在不同组件层面上的性能。RAGAs特别适用于那些结合了**检索（Retrieval）和生成（Generation）**两个主要组件的RAG系统。
+
+**无参考评估**：RAGAs最初设计为一种“无参考”评估框架，意味着它不依赖于人工注释的真实标签，而是利用大型语言模型（LLM）进行评估。
+
+**组件级评估**：RAGAs允许对RAG管道的两个主要组件——检索器和生成器——分别进行评估。这种分离评估方法有助于精确地识别管道中的性能瓶颈。
+
+**综合性评估指标**：RAGAs提供了一系列评估指标，包括**上下文精度(Context Precision)、上下文召回(Context Recall)、忠实度(Faithfulness)和答案相关性(Answer Relevancy)**。这些指标共同构成了RAGAs评分，用于全面评估RAG管道的性能。
+
+具体的评估流程和代码示例：[https://towardsdatascience.com/evaluating-rag-applications-with-ragas-81d67b0ee31a](https://towardsdatascience.com/evaluating-rag-applications-with-ragas-81d67b0ee31a)
+
 ## 知识图谱在RAG中的应用
 
-## 问题改写
+**Reference**:[https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8fec6](https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8fec6)
