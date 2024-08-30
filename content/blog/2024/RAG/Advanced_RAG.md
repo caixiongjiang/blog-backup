@@ -61,10 +61,6 @@ prompt_template_zh = """给出由三重反引号分隔的用户查询的答案``
 
 下面将会记录的所有RAG相关的技术都或多或少与上面这个图相关。我们将会介绍所有与RAG相关的步骤中相关的进阶技术，以及RAG效果测试数据集的建立、评估、测试。
 
-## 文档处理
-
-
-
 ## 文本分块
 
 **分块的目的主要是为了确保在内容向量化时尽可能减少噪声，同时保持语义相关性。**例如，在**语义搜索**(semantic search)中为一个包含特定主题信息的文档语料库建立索引。可以通过应用有效的分块策略，确保搜索结果准确捕捉用户查询的真实意图。如果分块太小或太大，可能导致搜索结果不精确或错过表面相关内容。作为经验之谈，如果文本块在没有周围上下文的情况下对人类来说可读可理解，它对语言模型也同样有意义。因此，找到语料库中文档的最佳块大小对于确保搜索结果的准确性和相关性至关重要。
@@ -606,7 +602,5 @@ $$Hit Rate = \frac{至少有一个相关文档的查询数}{总查询数}$$
 **综合性评估指标**：RAGAs提供了一系列评估指标，包括**上下文精度(Context Precision)、上下文召回(Context Recall)、忠实度(Faithfulness)和答案相关性(Answer Relevancy)**。这些指标共同构成了RAGAs评分，用于全面评估RAG管道的性能。
 
 具体的评估流程和代码示例：[https://towardsdatascience.com/evaluating-rag-applications-with-ragas-81d67b0ee31a](https://towardsdatascience.com/evaluating-rag-applications-with-ragas-81d67b0ee31a)
-
-## 知识图谱在RAG中的应用
 
 **Reference**:[https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8fec6](https://pub.towardsai.net/advanced-rag-techniques-an-illustrated-overview-04d193d8fec6)
