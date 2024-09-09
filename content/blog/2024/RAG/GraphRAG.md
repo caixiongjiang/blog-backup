@@ -58,6 +58,37 @@ GraphRAG的索引过程包括四个关键步骤：
 
 > 社区摘要生成：GraphRAG使用自下而上的方法为每个社区及其成员生成摘要。这些摘要包括社区内的主要实体、他们的关系和关键主张。此步骤概述了整个数据集，并为后续查询提供了有用的上下文信息。
 
+### 提示词Tuning
+
+尽管可以使用这里初始化的默认提示模板，但强烈建议通过GraphRAG提供的命令来创建自适应提示模板：GraphRAG会提取输入数据的信息，并借助大模型来分析与生成更具有针对性的提示模板。
+
+提示词自适应调整的流程如下：
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img26.jpg)
+
+命令参数使用如下：
+```bash
+python -m graphrag.prompt_tune [--root ROOT] [--domain DOMAIN]  [--method METHOD] [--limit LIMIT] [--language LANGUAGE] \
+[--max-tokens MAX_TOKENS] [--chunk-size CHUNK_SIZE] [--n-subset-max N_SUBSET_MAX] [--k K] \
+[--min-examples-required MIN_EXAMPLES_REQUIRED] [--no-entity-types] [--output OUTPUT]
+```
+参数说明：
+* `--root`（可选）：数据项目根目录，包括配置文件（YML、JSON或.env）。默认为当前目录。
+* `--domain`（可选）：与您的输入数据相关的领域，如“空间科学”、“微生物学”或“环境新闻”。如果留空，域将从输入数据中推断出来。
+* `--method`（可选）：选择文档的方法。选项是全部、随机、自动或顶部。默认是随机的。
+* `--limit`（可选）：使用随机或顶部选择时加载的文本单位限制。默认值为15。**如果大模型的token长度有限制，这里的limit参数可以设置小一些**
+* `--language`（可选）：用于输入处理的语言。如果它与输入的语言不同，LLM将进行翻译。默认值为“”，这意味着它将从输入中自动检测到。
+* `--max-tokens`（可选）：提示生成的最大令牌数量。默认值为2000。**需要注意这里的数值不包括输入的内容产生的token**
+* `--chunk-size`（可选）：用于从输入文档生成文本单元的令牌大小。默认值为200。
+* `--n-subset-max`（可选）：使用自动选择方法时要嵌入的文本块chunk数量。默认值为300。
+* `--k`（可选）：使用自动选择方法时要选择的文档数量。默认值为15。
+* `--min-examples-required`（可选）：实体提取提示所需的最小示例数量。默认值为2。
+* `--no-entity-types`（可选）：使用未键入的实体提取生成。当您的数据涵盖许多主题或高度随机化时，我们建议使用此数据。
+* `--output`（可选）：保存生成提示的文件夹。默认值为“提示”。
+
+**使用8k长度的大模型，如下配置大概可以完整生成**：`python -m graphrag.prompt_tune --limit 10`。
+
+
+
 ### 查询（Querying）
 
 GraphRAG有两种不同的查询工作流程，专为不同的查询量身定做。
@@ -909,7 +940,198 @@ import shutil
 shutil.rmtree("your_kg_result_dir")
 ```
 
-### GraphRAG可视化
+### Neo4j + GraphRAG
+
+GraphRAG生成的数据文件是以`parquet`文件的形式存储的，我们可以将这些文件导入到图形数据库`Neo4j`中，一般方法是通过`CSV文件`导入并构建知识图谱，通过转化文件手动导入的教程可以参考国外一篇博客的内容：[🔗click](https://mer.vin/2024/07/graphrag-neo4j)。
+
+当然也可以参考另外一个转化教程：[🔗click](https://github.com/tomasonjo/blogs/blob/master/msft_graphrag/ms_graphrag_import.ipynb?source=post_page-----e0d4fa00714c--------------------------------)
+
+*较新的neo4j数据库需要java jdk17/20的支持，需要下载较新的版本！本地部署*：
+```bash
+curl -O https://dist.neo4j.org/neo4j-community-5.23.0-unix.tar.gz
+cd neo4j-community-5.23.0
+./bin/neo4j start
+./bin/neo4j status
+```
+
+#### 图形检索器
+
+在进入检索器实现之前，我们将进行一个简单的图形分析，以熟悉提取的数据。我们首先定义数据库连接和执行Cypher语句（图形数据库查询语言）并输出Pandas DataFrame的函数。
+
+```python
+import pandas as pd
+
+NEO4J_URI="bolt://localhost"
+NEO4J_USERNAME="neo4j"
+NEO4J_PASSWORD="password"
+
+driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
+
+def db_query(cypher: str, params: Dict[str, Any] = {}) -> pd.DataFrame:
+    """Executes a Cypher statement and returns a DataFrame"""
+    return driver.execute_query(
+        cypher, parameters_=params, result_transformer_=Result.to_df
+    )
+```
+
+执行图形提取，默认使用的chunk大小为300。我们可以使用以下Cypher语句来验证块大小。
+
+```python
+db_query(
+  "MATCH (n:__Chunk__) RETURN n.n_tokens as token_count, count(*) AS count"
+)
+# token_count count
+# 300         15
+# 155         1
+```
+*存在15个300token的chunks，最后一个仅有155个token*
+
+**接下来，我们将要配置检索器来集成Neo4j图形数据库！**
+
+* **Local Retriever**：本地检索器首先使用矢量搜索来识别相关节点，然后收集链接信息并将其注入到LLM提示中。我们使用`LangChain`框架来集成：
+  * 首先配置向量索引：
+  ```python
+  index_name = "entity"
+
+  db_query(
+      """
+  CREATE VECTOR INDEX """
+      + index_name
+      + """ IF NOT EXISTS FOR (e:__Entity__) ON e.description_embedding
+  OPTIONS {indexConfig: {
+  `vector.dimensions`: 1536,
+  `vector.similarity_function`: 'cosine'
+  }}
+  """
+  )
+  ```
+
+  * 计算和存储社区权重，该权重被定义为社区中实体出现的不同文本块的数量。
+  ```python
+  db_query(
+      """
+  MATCH (n:`__Community__`)<-[:IN_COMMUNITY]-()<-[:HAS_ENTITY]-(c)
+  WITH n, count(distinct c) AS chunkCount
+  SET n.weight = chunkCount"""
+  )
+  ```
+  * 每个部分的候选数量（文本单元、社区报告......）是可配置的。**GraphRAG原始实现涉及基于令牌计数的过滤，但我们将在这里简化它**。我根据默认配置值开发了以下简化的顶级候选过滤器值。
+  ```python
+  topChunks = 3
+  topCommunities = 3
+  topOutsideRels = 10
+  topInsideRels = 10
+  topEntities = 10
+  ```
+  * 定义一系列`retrieval_query`:
+  ```python
+  lc_retrieval_query = """
+  WITH collect(node) as nodes
+  // Entity - Text Unit Mapping
+  WITH
+  collect {
+      UNWIND nodes as n
+      MATCH (n)<-[:HAS_ENTITY]->(c:__Chunk__)
+      WITH c, count(distinct n) as freq
+      RETURN c.text AS chunkText
+      ORDER BY freq DESC
+      LIMIT $topChunks
+  } AS text_mapping,
+  // Entity - Report Mapping
+  collect {
+      UNWIND nodes as n
+      MATCH (n)-[:IN_COMMUNITY]->(c:__Community__)
+      WITH c, c.rank as rank, c.weight AS weight
+      RETURN c.summary 
+      ORDER BY rank, weight DESC
+      LIMIT $topCommunities
+  } AS report_mapping,
+  // Outside Relationships 
+  collect {
+      UNWIND nodes as n
+      MATCH (n)-[r:RELATED]-(m) 
+      WHERE NOT m IN nodes
+      RETURN r.description AS descriptionText
+      ORDER BY r.rank, r.weight DESC 
+      LIMIT $topOutsideRels
+  } as outsideRels,
+  // Inside Relationships 
+  collect {
+      UNWIND nodes as n
+      MATCH (n)-[r:RELATED]-(m) 
+      WHERE m IN nodes
+      RETURN r.description AS descriptionText
+      ORDER BY r.rank, r.weight DESC 
+      LIMIT $topInsideRels
+  } as insideRels,
+  // Entities description
+  collect {
+      UNWIND nodes as n
+      RETURN n.description AS descriptionText
+  } as entities
+  // We don't have covariates or claims here
+  RETURN {Chunks: text_mapping, Reports: report_mapping, 
+        Relationships: outsideRels + insideRels, 
+        Entities: entities} AS text, 1.0 AS score, {} AS metadata
+  """
+
+  lc_vector = Neo4jVector.from_existing_index(
+      # 可以换成本地embedding模型
+      OpenAIEmbeddings(model="text-embedding-3-small"),
+      url=NEO4J_URI,
+      username=NEO4J_USERNAME,
+      password=NEO4J_PASSWORD,
+      index_name=index_name,
+      retrieval_query=lc_retrieval_query
+  )
+  ```
+
+  * 开始检索：
+  ```python
+  docs = lc_vector.similarity_search(
+      "What do you know about Cratchitt family?",
+      k=topEntities,
+      params={
+          "topChunks": topChunks,
+          "topCommunities": topCommunities,
+          "topOutsideRels": topOutsideRels,
+          "topInsideRels": topInsideRels,
+      },
+  )
+  # print(docs[0].page_content)
+  ```
+
+* **Global Retriever**:全局检索器架构稍微简单一些。它似乎在指定的分层级别上迭代所有社区摘要，生成中间摘要，然后根据中间摘要生成最终响应。
+
+在全局检索中，必须提前决定哪个定义了我们想要迭代的层次，等级级别越高，社区就越大，但社区越少。我们将使用LangChain实现全局检索器，使用相同的map，并减少与GraphRAG论文中的提示词。
+
+```python
+def global_retriever(query: str, level: int, response_type: str = response_type) -> str:
+    community_data = graph.query(
+        """
+    MATCH (c:__Community__)
+    WHERE c.level = $level
+    RETURN c.full_content AS output
+    """,
+        params={"level": level},
+    )
+    intermediate_results = []
+    for community in tqdm(community_data, desc="Processing communities"):
+        intermediate_response = map_chain.invoke(
+            {"question": query, "context_data": community["output"]}
+        )
+        intermediate_results.append(intermediate_response)
+    final_response = reduce_chain.invoke(
+        {
+            "report_data": intermediate_results,
+            "question": query,
+            "response_type": response_type,
+        }
+    )
+    return final_response
+```
+
+完整的代码请参考：[🔗click](https://github.com/tomasonjo/blogs/blob/master/msft_graphrag/ms_graphrag_retriever.ipynb)
 
 
 ### 其他替代方案
