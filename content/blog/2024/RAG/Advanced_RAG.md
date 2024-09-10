@@ -373,6 +373,65 @@ jieba 5 nr
 
 #### ElasticSearch检索器
 
+Elasticsearch 是位于 Elastic Stack 中心的分布式搜索和分析引擎。Logstach 和 Beats 促进采集、合计以及充实你的数据并在 Elasticsearch 中存储它们。Kibana 允许你去交互式的探索、可视化和共享对数据的见解，以及监视这个栈（Elastic Stack）。Elasticsearch 为各种数据类型提供接近实时的搜索和分析。不论你有结构化或非结构化的文本、数字数据，还是地理空间数据，Elasticsearch 能以支持快速搜索的方式高效地存储和索引它。
+
+Elasticsearch默认使用BM25算法作为默认检索算法，Elasticsearch允许分布式部署，可以随着数据规模的增长而无缝增长，提供了灵活性。
+
+* Elasticsearch部署（以Linux系统为例）：
+
+```bash
+curl -L -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.11.1-linux-x86_64.tar.gz
+tar -xvf elasticsearch-7.11.1-linux-x86_64.tar.gz
+cd elasticsearch-7.11.1/bin
+./elasticsearch
+```
+*其余系统的部署教程详细见[链接🔗](https://elasticsearch.bookhub.tech/getting_started/install)*
+
+这样单个节点的Elasticsearch 集群就启动好了！
+
+* Langchain集成ElasticSearch检索器：
+
+```python
+import ssl
+import openai
+from elasticsearch import Elasticsearch
+from langchain_community.vectorstores import ElasticsearchStore
+from langchain_openai import OpenAIEmbeddings
+ 
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.document_loaders import TextLoader
+ 
+# 设置代理访问 API
+os.environ["HTTP_PROXY"] = "http://127.0.0.1:33210"
+os.environ["HTTPS_PROXY"] = "http://127.0.0.1:33210"
+os.environ["ALL_PROXY"] = "socks5://127.0.0.1:33211"
+ 
+# 加载文档
+file_path = 'conf/state_of_the_union.txt'
+encoding = 'utf-8'
+loader = TextLoader(file_path, encoding=encoding)
+documents = loader.load()
+ 
+# 文档分割
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+docs = text_splitter.split_documents(documents)
+ 
+# 连接 Elasticsearch
+conn = Elasticsearch(
+    "https://127.0.0.1:9200",
+    ca_certs = "certs/http_ca.crt",
+    basic_auth = ("elastic", "changeme"),
+    verify_certs=False
+)
+ 
+# 创建索引并进行检索
+embeddings = OpenAIEmbeddings()
+db = ElasticsearchStore.from_documents(docs, embeddings, index_name="test_index", es_connection=conn)
+db.client.indices.refresh(index="test_index")
+query = "What did the president say about Ketanji Brown Jackson"
+results = db.similarity_search(query)
+print(results)
+```
 
 ### 混合检索
 
@@ -522,7 +581,7 @@ prompt = """
 
 查询路由是指针对用户的查询，由LLM来决定下一步操作的决策步骤。通常的选择包括总结信息、对某些数据索引进行搜索，或尝试多种不同的路径并将它们的输出合成为唯一的答案。实现方式便是`Agent智能体`。
 
-**查询路由器(Query Routers)**还用于选择索引，或者更通俗地说是选择执行用户查询命令的数据源。无论是拥有多个数据源（比如经典的向量存储、图形数据库或关系数据库），还是拥有多层索引结构（比如处理在多文档存储的时候，一个典型的索引创建方案很可能是一个由摘要组成的索引和另一个由文档块向量组成的索引），都需要进行查询路径选择。
+**查询路由器**(Query Routers)还用于选择索引，或者更通俗地说是选择执行用户查询命令的数据源。无论是拥有多个数据源（比如经典的向量存储、图形数据库或关系数据库），还是拥有多层索引结构（比如处理在多文档存储的时候，一个典型的索引创建方案很可能是一个由摘要组成的索引和另一个由文档块向量组成的索引），都需要进行查询路径选择。
 
 其中所有的查询选择，结果判断，都需要大模型自己判断，而不是人工定制好一个路径。
 
