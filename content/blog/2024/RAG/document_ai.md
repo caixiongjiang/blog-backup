@@ -444,7 +444,17 @@ Marker识别流程：
 * 8、根据需要提取出前面分为纯图片的内容，进行保存，并以链接的形式插入markdown中
 * 9、最后将所有提取出的元信息，进行一些基本的过滤清理，按照顺序组装起来成为成品markdown（edit_model）
 
+
+#### MinerU
+
+`MinerU`是上海人工智能实验室推出的一款pdf转markdown的工具。`MinerU`底层使用了`PDF-Extract-Kit`工具，布局检测使用了`LayoutLMv3`模型进行微调后达到一些数据集上的最佳结果。公式检测使用`Pix2Text-MFD`，行级文本检测使用`YOLOv8`的微调模型，OCR模型则使用`Paddle OCR`模型。
+
+与Marker相比，MinerU缺少了基于语义的阅读顺序的模型，也不支持`Mac OS`，虽然布局检测的模型效果超过了其他模型，但学术性质机构公布的数据真实性有待考量。目前`MinerU`还在不断迭代中，是一款未来可期的工具。
+
+
 #### unstructed
+
+
 
 
 

@@ -1134,4 +1134,21 @@ def global_retriever(query: str, level: int, response_type: str = response_type)
 完整的代码请参考：[🔗click](https://github.com/tomasonjo/blogs/blob/master/msft_graphrag/ms_graphrag_retriever.ipynb)
 
 
-### 其他替代方案
+### 其他替代方案(Triplex)
+
+微软使用的是GPT-4O这种超级大模型进行**实体和关系抽取**，替代的方案则是对实体抽取专门使用了一个较小的LLM叫`SciPhi/Triplex`来进行实体和关系的抽取，它实际上是一个经过微调的大语言模型，但是参数量更小。
+
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img31.jpg)
+
+
+Triplex模型如下：[🔗click](https://huggingface.co/SciPhi/Triplex)，Triplex是Phi3-3.8B的微调版本，用于从SciPhi.AI开发的非结构化数据中创建知识图。它的工作原理是从文本或其他数据源中提取三元组——由主语、谓语和宾语组成的简单语句。
+
+![](https://blog-1311257248.cos.ap-nanjing.myqcloud.com/imgs/rag/img32.jpg)
+
+目前这种技术已经在`R2R`工具中集成了，它可以使用ollama使用`triplex模型 + 用于回答的LLM + 用于嵌入的embedding模型来使用GraphRAG`。具体使用方法：[🔗click](https://r2r-docs.sciphi.ai/cookbooks/graphrag)
+
+
+### 总结
+
+在拥有本地大模型（32B以上）的情况下，GraphRAG的成本会有所下降，顶多就是多点电费，随着大模型的基础能力越来越强，GraphRAG的使用成本会越来越低，这种通过实体关系来搜索的方式加强了不同文档之间的联系。
